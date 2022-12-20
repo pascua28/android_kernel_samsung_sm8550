@@ -1,6 +1,5 @@
 # SPDX-License-Identifier: GPL-2.0
 
-KBUILD_OPTIONS += SYNC_FENCE_ROOT=$(KERNEL_SRC)/$(M)/../
 
 all: modules
 

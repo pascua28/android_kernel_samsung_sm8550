@@ -1,7 +1,5 @@
 # SPDX-License-Identifier: GPL-2.0
 
-KBUILD_OPTIONS += MSM_EXT_DISPLAY_ROOT=$(KERNEL_SRC)/$(M)/../
-
 all: modules
 
 modules_install:

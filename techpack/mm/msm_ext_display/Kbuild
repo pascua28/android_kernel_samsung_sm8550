@@ -1,5 +1,6 @@
 # SPDX-License-Identifier: GPL-2.0-only
 
+MSM_EXT_DISPLAY_ROOT=$(ROOTDIR)display/vendor/qcom/opensource/mm-drivers
 include $(MSM_EXT_DISPLAY_ROOT)/config/kalamammdrivers.conf
 LINUXINCLUDE += -include $(MSM_EXT_DISPLAY_ROOT)/config/kalamammdriversconf.h
 
