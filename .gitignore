@@ -165,3 +165,5 @@ arch/*/configs/vendor/*_defconfig
 
 # Documentation toolchain
 sphinx_*/
+
+*.zip
