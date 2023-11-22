@@ -35,6 +35,13 @@
 #include <linux/refcount.h>
 #include <linux/user_namespace.h>
 #include <linux/statfs.h>
+#include <linux/freezer.h>
+
+#ifdef CONFIG_FUSE_SUPPORT_STLOG
+#include <linux/fslog.h>
+#else
+#define ST_LOG(fmt, ...)
+#endif
 
 #define FUSE_SUPER_MAGIC 0x65735546
 
@@ -76,13 +83,7 @@ struct fuse_dentry {
 		u64 time;
 		struct rcu_head rcu;
 	};
-
-#ifdef CONFIG_FUSE_BPF
 	struct path backing_path;
-
-	/* bpf program *only* set for negative dentries */
-	struct bpf_prog *bpf;
-#endif
 };
 
 static inline struct fuse_dentry *get_fuse_dentry(const struct dentry *entry)
@@ -1509,11 +1510,14 @@ void *fuse_link_finalize(struct fuse_bpf_args *fa, struct dentry *entry,
 			 struct inode *dir, struct dentry *newent);
 
 int fuse_release_initialize(struct fuse_bpf_args *fa, struct fuse_release_in *fri,
-			    struct inode *inode, struct fuse_file *ff);
+			    struct inode *inode, struct file *file);
+int fuse_releasedir_initialize(struct fuse_bpf_args *fa,
+			struct fuse_release_in *fri,
+			struct inode *inode, struct file *file);
 int fuse_release_backing(struct fuse_bpf_args *fa,
-			 struct inode *inode, struct fuse_file *ff);
+			 struct inode *inode, struct file *file);
 void *fuse_release_finalize(struct fuse_bpf_args *fa,
-			    struct inode *inode, struct fuse_file *ff);
+			    struct inode *inode, struct file *file);
 
 int fuse_flush_initialize(struct fuse_bpf_args *fa, struct fuse_flush_in *ffi,
 			  struct file *file, fl_owner_t id);
@@ -1637,9 +1641,6 @@ int fuse_file_write_iter_backing(struct fuse_bpf_args *fa,
 void *fuse_file_write_iter_finalize(struct fuse_bpf_args *fa,
 		struct kiocb *iocb, struct iov_iter *from);
 
-long fuse_backing_ioctl(struct file *file, unsigned int command, unsigned long arg, int flags);
-
-int fuse_file_flock_backing(struct file *file, int cmd, struct file_lock *fl);
 ssize_t fuse_backing_mmap(struct file *file, struct vm_area_struct *vma);
 
 int fuse_file_fallocate_initialize(struct fuse_bpf_args *fa,
@@ -2039,5 +2040,49 @@ static inline int fuse_bpf_run(struct bpf_prog *prog, struct fuse_bpf_args *fba)
 })
 
 #endif /* CONFIG_FUSE_BPF */
+
+#ifdef CONFIG_FREEZER
+static inline void fuse_freezer_do_not_count(void)
+{
+	current->flags |= PF_FREEZER_SKIP;
+}
+
+static inline void fuse_freezer_count(void)
+{
+	current->flags &= ~PF_FREEZER_SKIP;
+}
+#else /* !CONFIG_FREEZER */
+static inline void fuse_freezer_do_not_count(void) {}
+static inline void fuse_freezer_count(void) {}
+#endif
+
+#define fuse_wait_event(wq, condition)						\
+({										\
+	fuse_freezer_do_not_count();						\
+	wait_event(wq, condition);						\
+	fuse_freezer_count();							\
+})
+
+#define fuse_wait_event_killable(wq, condition)					\
+({										\
+	int __ret = 0;								\
+										\
+	fuse_freezer_do_not_count();						\
+	__ret = wait_event_killable(wq, condition);				\
+	fuse_freezer_count();							\
+										\
+	__ret;									\
+})
+
+#define fuse_wait_event_killable_exclusive(wq, condition)			\
+({										\
+	int __ret = 0;								\
+										\
+	fuse_freezer_do_not_count();						\
+	__ret = wait_event_killable_exclusive(wq, condition);			\
+	fuse_freezer_count();							\
+										\
+	__ret;									\
+})
 
 #endif /* _FS_FUSE_I_H */

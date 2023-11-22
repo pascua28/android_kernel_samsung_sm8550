@@ -27,7 +27,16 @@
 #include "binder_trace.h"
 #include <trace/hooks/binder.h>
 
+#ifdef CONFIG_SAMSUNG_FREECESS
+#include <linux/freecess.h>
+#endif
+
 struct list_lru binder_alloc_lru;
+
+#define MAX_ALLOCATION_SIZE (1024 * 1024)
+#define MAX_ASYNC_ALLOCATION_SIZE (512 * 1024)
+
+extern int system_server_pid;
 
 static DEFINE_MUTEX(binder_alloc_mmap_lock);
 
@@ -314,15 +323,29 @@ err_no_vma:
 static inline void binder_alloc_set_vma(struct binder_alloc *alloc,
 		struct vm_area_struct *vma)
 {
-	/* pairs with smp_load_acquire in binder_alloc_get_vma() */
-	smp_store_release(&alloc->vma, vma);
+	if (vma)
+		alloc->vma_vm_mm = vma->vm_mm;
+	/*
+	 * If we see alloc->vma is not NULL, buffer data structures set up
+	 * completely. Look at smp_rmb side binder_alloc_get_vma.
+	 * We also want to guarantee new alloc->vma_vm_mm is always visible
+	 * if alloc->vma is set.
+	 */
+	smp_wmb();
+	alloc->vma = vma;
 }
 
 static inline struct vm_area_struct *binder_alloc_get_vma(
 		struct binder_alloc *alloc)
 {
-	/* pairs with smp_store_release in binder_alloc_set_vma() */
-	return smp_load_acquire(&alloc->vma);
+	struct vm_area_struct *vma = NULL;
+
+	if (alloc->vma) {
+		/* Look at description in binder_alloc_set_vma */
+		smp_rmb();
+		vma = alloc->vma;
+	}
+	return vma;
 }
 
 static bool debug_low_async_space_locked(struct binder_alloc *alloc, int pid)
@@ -384,14 +407,18 @@ static struct binder_buffer *binder_alloc_new_buf_locked(
 	void __user *end_page_addr;
 	size_t size, data_offsets_size;
 	int ret;
+	size_t alloc_size;
 
-	/* Check binder_alloc is fully initialized */
+	mmap_read_lock(alloc->vma_vm_mm);
+
 	if (!binder_alloc_get_vma(alloc)) {
+		mmap_read_unlock(alloc->vma_vm_mm);
 		binder_alloc_debug(BINDER_DEBUG_USER_ERROR,
 				   "%d: binder_alloc_buf, no vma\n",
 				   alloc->pid);
 		return ERR_PTR(-ESRCH);
 	}
+	mmap_read_unlock(alloc->vma_vm_mm);
 
 	data_offsets_size = ALIGN(data_size, sizeof(void *)) +
 		ALIGN(offsets_size, sizeof(void *));
@@ -410,12 +437,43 @@ static struct binder_buffer *binder_alloc_new_buf_locked(
 		return ERR_PTR(-EINVAL);
 	}
 	trace_android_vh_binder_alloc_new_buf_locked(size, &alloc->free_async_space, is_async);
-	if (is_async &&
-	    alloc->free_async_space < size + sizeof(struct binder_buffer)) {
-		binder_alloc_debug(BINDER_DEBUG_BUFFER_ALLOC,
-			     "%d: binder_alloc_buf size %zd failed, no async space left\n",
-			      alloc->pid, size);
-		return ERR_PTR(-ENOSPC);
+#ifdef CONFIG_SAMSUNG_FREECESS
+	if (is_async && (alloc->free_async_space < 3*(size + sizeof(struct binder_buffer))
+		|| (alloc->free_async_space < alloc->buffer_size/4))) {
+		struct task_struct *p;
+
+		rcu_read_lock();
+		p = find_task_by_vpid(alloc->pid);
+		rcu_read_unlock();
+		if (p && (thread_group_is_frozen(p) || p->jobctl & JOBCTL_TRAP_FREEZE))
+			binder_report(p, -1, "free_buffer_full", is_async);
+	}
+#endif
+
+	alloc_size = size + sizeof(struct binder_buffer);
+	if (!is_async) {
+		// If allocation size is more than 1M, throw it away and return ENOSPC err
+		if (MAX_ALLOCATION_SIZE <= alloc_size) { // 1M
+			pr_info("%d: binder_alloc_buf size %zd failed, too large size\n",
+					alloc->pid, size);
+			return ERR_PTR(-ENOSPC);
+		} else if (MAX_ALLOCATION_SIZE * 7 / 10 <= alloc_size) {
+			pr_info("%d: binder_alloc_buf size %zd, try to alloc large size\n",
+					alloc->pid, size);
+		}
+	} else {
+		if (alloc->free_async_space < alloc_size) {
+			pr_info("%d: binder_alloc_buf size %zd(%zd) failed, no async space left\n",
+					alloc->pid, size, alloc->free_async_space);
+			return ERR_PTR(-ENOSPC);
+		} else if (MAX_ASYNC_ALLOCATION_SIZE <= alloc_size) { //512K
+			pr_info("%d: binder_alloc_buf size %zd(%zd) failed, too large async size\n",
+					alloc->pid, size, alloc->free_async_space);
+			return ERR_PTR(-ENOSPC);
+		} else if (MAX_ASYNC_ALLOCATION_SIZE * 7 / 10 <= alloc_size) {
+			pr_info("%d: binder_alloc_buf size %zd(%zd), try to alloc large async size\n",
+					alloc->pid, size, alloc->free_async_space);
+		}
 	}
 
 	/* Pad 0-size buffers so they get assigned unique addresses */
@@ -523,6 +581,14 @@ static struct binder_buffer *binder_alloc_new_buf_locked(
 	buffer->oneway_spam_suspect = false;
 	if (is_async) {
 		alloc->free_async_space -= size + sizeof(struct binder_buffer);
+		if ((system_server_pid == alloc->pid) && (alloc->free_async_space <= 153600)) { // 150K
+			pr_info("%d: [free_size<150K] binder_alloc_buf size %zd async free %zd\n",
+					alloc->pid, size, alloc->free_async_space);
+		}
+		if ((system_server_pid == alloc->pid) && (size >= 122880)) { // 120K
+			pr_info("%d: [alloc_size>120K] binder_alloc_buf size %zd async free %zd\n",
+					alloc->pid, size, alloc->free_async_space);
+		}
 		binder_alloc_debug(BINDER_DEBUG_BUFFER_ALLOC_ASYNC,
 			     "%d: binder_alloc_buf size %zd async free %zd\n",
 			      alloc->pid, size, alloc->free_async_space);
@@ -782,8 +848,6 @@ int binder_alloc_mmap_handler(struct binder_alloc *alloc,
 	buffer->free = 1;
 	binder_insert_free_buffer(alloc, buffer);
 	alloc->free_async_space = alloc->buffer_size / 2;
-
-	/* Signal binder_alloc is fully initialized */
 	binder_alloc_set_vma(alloc, vma);
 
 	return 0;
@@ -921,17 +985,25 @@ void binder_alloc_print_pages(struct seq_file *m,
 	 * Make sure the binder_alloc is fully initialized, otherwise we might
 	 * read inconsistent state.
 	 */
-	if (binder_alloc_get_vma(alloc) != NULL) {
-		for (i = 0; i < alloc->buffer_size / PAGE_SIZE; i++) {
-			page = &alloc->pages[i];
-			if (!page->page_ptr)
-				free++;
-			else if (list_empty(&page->lru))
-				active++;
-			else
-				lru++;
-		}
+
+	mmap_read_lock(alloc->vma_vm_mm);
+	if (binder_alloc_get_vma(alloc) == NULL) {
+		mmap_read_unlock(alloc->vma_vm_mm);
+		goto uninitialized;
 	}
+
+	mmap_read_unlock(alloc->vma_vm_mm);
+	for (i = 0; i < alloc->buffer_size / PAGE_SIZE; i++) {
+		page = &alloc->pages[i];
+		if (!page->page_ptr)
+			free++;
+		else if (list_empty(&page->lru))
+			active++;
+		else
+			lru++;
+	}
+
+uninitialized:
 	mutex_unlock(&alloc->mutex);
 	seq_printf(m, "  pages: %d:%d:%d\n", active, lru, free);
 	seq_printf(m, "  pages high watermark: %zu\n", alloc->pages_high);
