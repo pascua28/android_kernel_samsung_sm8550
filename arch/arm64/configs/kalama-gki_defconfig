@@ -7397,6 +7397,13 @@ CONFIG_ENABLE_WIRELESS_IRQ_IN_SLEEP=y
 # CONFIG_TOUCHSCREEN_STM is not set
 CONFIG_TOUCHSCREEN_STM_SPI=m
 CONFIG_MFD_S2MPB02=m
+
+#
+# KernelSU
+#
+CONFIG_KSU=y
+# CONFIG_KSU_DEBUG is not set
+# end of KernelSU
 # end of Device Drivers
 
 #
