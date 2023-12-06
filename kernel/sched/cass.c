@@ -179,10 +179,10 @@ static int cass_best_cpu(struct task_struct *p, int prev_cpu, bool sync)
 	return best->cpu;
 }
 
-static int cass_select_task_rq_fair(struct task_struct *p, int prev_cpu,
-				    int sd_flag, int wake_flags)
+static int cass_select_task_rq_fair(struct task_struct *p, int prev_cpu, int wake_flags)
 {
 	bool sync;
+	int sd_flag = wake_flags & 0xF;
 
 	/* Don't balance on exec since we don't know what @p will look like */
 	if (sd_flag & SD_BALANCE_EXEC)
