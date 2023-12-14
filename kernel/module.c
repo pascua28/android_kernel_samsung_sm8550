@@ -3602,6 +3602,7 @@ static const __initconst char * const blacklist[] = {
 	"msm_show_resume_irq",
 	"rimps_log",
 	"qcom_edac",
+	"msm_lmh_dcvs",
 
 	NULL
 };
