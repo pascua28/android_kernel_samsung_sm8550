@@ -3596,6 +3596,8 @@ int __weak module_frob_arch_sections(Elf_Ehdr *hdr,
 }
 
 static const __initconst char * const blacklist[] = {
+	"input_booster_lkm",
+
 	NULL
 };
 
