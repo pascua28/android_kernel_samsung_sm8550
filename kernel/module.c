@@ -3595,6 +3595,10 @@ int __weak module_frob_arch_sections(Elf_Ehdr *hdr,
 	return 0;
 }
 
+static const __initconst char * const blacklist[] = {
+	NULL
+};
+
 /* module_blacklist is a comma-separated list of module names */
 static char *module_blacklist;
 static bool blacklisted(const char *module_name)
@@ -4072,6 +4076,7 @@ static int load_module(struct load_info *info, const char __user *uargs,
 #ifdef CONFIG_RKP
 	struct module_info rkp_mod_info;
 #endif
+	int i;
 
 	/*
 	 * Do the signature check (if any) first. All that
@@ -4104,6 +4109,13 @@ static int load_module(struct load_info *info, const char __user *uargs,
 	err = setup_load_info(info, flags);
 	if (err)
 		goto free_copy;
+
+	for (i = 0; blacklist[i]; i++) {
+		if (!strcmp(info->name, blacklist[i])) {
+			err = -EPERM;
+			goto free_copy;
+		}
+	}
 
 	/*
 	 * Now that we know we have the correct module name, check
