@@ -43,12 +43,8 @@ static u32 size;
 static struct file *file_open(const char *path, int flags, umode_t rights)
 {
 	struct file *filp;
-	mm_segment_t oldfs;
 
-	oldfs = get_fs();
-	set_fs(KERNEL_DS);
 	filp = filp_open(path, flags, rights);
-	set_fs(oldfs);
 
 	if (IS_ERR(filp))
 		return NULL;
