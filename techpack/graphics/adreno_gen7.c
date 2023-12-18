@@ -980,7 +980,7 @@ static void gen7_err_callback(struct adreno_device *adreno_dev, int bit)
 			"CP: AHB bus error, CP_RL_ERROR_DETAILS_0:0x%x CP_RL_ERROR_DETAILS_1:0x%x\n",
 			err_details_0, err_details_1);
 		break;
-		}
+		}		
 	case GEN7_INT_ATBASYNCFIFOOVERFLOW:
 		dev_crit_ratelimited(dev, "RBBM: ATB ASYNC overflow\n");
 		break;

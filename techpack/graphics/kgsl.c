@@ -26,6 +26,7 @@
 #include <soc/qcom/of_common.h>
 #include <soc/qcom/secure_buffer.h>
 #include <soc/qcom/boot_stats.h>
+#include <trace/hooks/mm.h>
 
 #include "kgsl_compat.h"
 #include "kgsl_debugfs.h"
@@ -2252,6 +2253,10 @@ long kgsl_ioctl_gpu_aux_command(struct kgsl_device_private *dev_priv,
 
 	if (!(param->flags &
 		(KGSL_GPU_AUX_COMMAND_BIND | KGSL_GPU_AUX_COMMAND_TIMELINE)))
+		return -EINVAL;
+
+	if ((param->flags & KGSL_GPU_AUX_COMMAND_SYNC) &&
+		(param->numsyncs > KGSL_MAX_SYNCPOINTS))
 		return -EINVAL;
 
 	context = kgsl_context_get_owner(dev_priv, param->context_id);
@@ -4962,6 +4967,20 @@ int kgsl_of_property_read_ddrtype(struct device_node *node, const char *base,
 	return of_property_read_u32(node, base, ptr);
 }
 
+static void kgsl_show_mem(void *data, unsigned int filter, nodemask_t *nodemask)
+{
+	long total_kbytes = atomic_long_read(&kgsl_driver.stats.page_alloc) >> 10;
+
+	pr_info("%s: %ld kB\n", "KgslSharedmem", total_kbytes);
+}
+
+static void kgsl_meminfo(void *data, struct seq_file *m)
+{
+	long total_kbytes = atomic_long_read(&kgsl_driver.stats.page_alloc) >> 10;
+
+	show_val_meminfo(m, "KgslSharedmem", total_kbytes);
+}
+
 int kgsl_device_platform_probe(struct kgsl_device *device)
 {
 	struct platform_device *pdev = device->pdev;
@@ -5007,6 +5026,9 @@ int kgsl_device_platform_probe(struct kgsl_device *device)
 	/* Set up the GPU events for the device */
 	kgsl_device_events_probe(device);
 
+	register_trace_android_vh_show_mem(kgsl_show_mem, NULL);
+	register_trace_android_vh_meminfo_proc_show(kgsl_meminfo, NULL);
+
 	/* Initialize common sysfs entries */
 	kgsl_pwrctrl_init_sysfs(device);
 
@@ -5031,7 +5053,9 @@ error:
 void kgsl_device_platform_remove(struct kgsl_device *device)
 {
 	del_timer(&device->work_period_timer);
-
+	unregister_trace_android_vh_show_mem(kgsl_show_mem, NULL);
+	unregister_trace_android_vh_meminfo_proc_show(kgsl_meminfo, NULL);
+	
 	if (device->events_wq) {
 		destroy_workqueue(device->events_wq);
 		device->events_wq = NULL;
@@ -5065,6 +5089,11 @@ void kgsl_core_exit(void)
 {
 	kgsl_exit_page_pools();
 	kgsl_eventlog_exit();
+
+	if (kgsl_driver.highprio_workqueue) {
+		destroy_workqueue(kgsl_driver.highprio_workqueue);
+		kgsl_driver.highprio_workqueue = NULL;
+	}
 
 	if (kgsl_driver.workqueue) {
 		destroy_workqueue(kgsl_driver.workqueue);
@@ -5174,6 +5203,14 @@ int __init kgsl_core_init(void)
 	INIT_LIST_HEAD(&kgsl_driver.pagetable_list);
 
 	INIT_LIST_HEAD(&kgsl_driver.wp_list);
+	kgsl_driver.highprio_workqueue = alloc_workqueue("kgsl-highprio-workqueue",
+		WQ_UNBOUND | WQ_MEM_RECLAIM | WQ_SYSFS | WQ_HIGHPRI, 0);
+
+	if (!kgsl_driver.highprio_workqueue) {
+		pr_err("kgsl: Failed to allocate kgsl highprio workqueue\n");
+		result = -ENOMEM;
+		goto err;
+	}
 
 	kgsl_driver.workqueue = alloc_workqueue("kgsl-workqueue",
 		WQ_UNBOUND | WQ_MEM_RECLAIM | WQ_SYSFS, 0);

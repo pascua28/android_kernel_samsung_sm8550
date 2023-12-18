@@ -1476,7 +1476,7 @@ void gen7_gmu_suspend(struct adreno_device *adreno_dev)
 
 	dev_err(&gmu->pdev->dev, "Suspended GMU\n");
 
-	device->state = KGSL_STATE_NONE;
+	kgsl_pwrctrl_set_state(device, KGSL_STATE_NONE);
 }
 
 static int gen7_gmu_dcvs_set(struct adreno_device *adreno_dev,
@@ -2572,7 +2572,7 @@ static int gen7_gmu_power_off(struct adreno_device *adreno_dev)
 
 	gen7_rdpm_cx_freq_update(gmu, 0);
 
-	device->state = KGSL_STATE_NONE;
+	kgsl_pwrctrl_set_state(device, KGSL_STATE_NONE);
 
 	return 0;
 
@@ -2758,7 +2758,7 @@ static int gen7_first_boot(struct adreno_device *adreno_dev)
 	set_bit(GMU_PRIV_FIRST_BOOT_DONE, &gmu->flags);
 	set_bit(GMU_PRIV_GPU_STARTED, &gmu->flags);
 
-	/*
+ 	/*
 	 * BCL needs respective Central Broadcast register to
 	 * be programed from TZ. This programing happens only
 	 * when zap shader firmware load is successful. Zap firmware
@@ -2908,7 +2908,7 @@ static void gmu_idle_check(struct work_struct *work)
 		goto done;
 	}
 
-	device->slumber = true;
+	device->skip_inline_submit = true;
 	spin_unlock(&device->submit_lock);
 
 	ret = gen7_power_off(adreno_dev);
