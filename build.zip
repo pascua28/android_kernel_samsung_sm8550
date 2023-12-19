@@ -1,0 +1,85 @@
+#!/bin/bash
+# AFANEH-KERNEL-BUILD menu
+
+# Variables
+menu_version="v2.3"
+DIR=`readlink -f .`
+OUT_DIR=$DIR/out
+PARENT_DIR=`readlink -f ${DIR}/..`
+
+export CROSS_COMPILE=aarch64-linux-gnu-
+export CC=$PARENT_DIR/../llvm-17/bin/clang
+
+export PLATFORM_VERSION=13
+export ANDROID_MAJOR_VERSION=t
+
+cflags+="-I${PARENT_DIR}/kernel-build-tools/linux-x86/include "
+ldflags+="-Wl,-rpath,${PARENT_DIR}/kernel-build-tools/linux-x86/lib64 "
+ldflags+="-L ${PARENT_DIR}/kernel-build-tools/linux-x86/lib64 "
+ldflags+="-fuse-ld=lld --rtlib=compiler-rt"
+export HOSTCFLAGS="$cflags"
+export HOSTLDFLAGS="$ldflags"
+
+export PATH=$PARENT_DIR/build-tools/path/linux-x86:$PATH
+export PATH=$PARENT_DIR/kernel-build-tools/linux-x86/bin:$PATH
+
+export PATH=$PARENT_DIR/../llvm-17/bin:$PATH
+
+export LLVM=1 LLVM_IAS=1
+export ARCH=arm64
+#KERNEL_MAKE_ENV="LOCALVERSION=-afaneh92"
+
+# Color
+ON_BLUE=`echo -e "\033[44m"`	# On Blue
+BRED=`echo -e "\033[1;31m"`	# Bold Red
+BBLUE=`echo -e "\033[1;34m"`	# Bold Blue
+BGREEN=`echo -e "\033[1;32m"`	# Bold Green
+UNDER_LINE=`echo -e "\e[4m"`	# Text Under Line
+STD=`echo -e "\033[0m"`		# Text Clear
+ 
+clean(){
+  echo "${BGREEN}***** Cleaning in Progress *****${STD}"
+  make clean
+  make mrproper
+  [ -d "$OUT_DIR" ] && rm -rf $OUT_DIR
+  echo "${BGREEN}***** Cleaning Done *****${STD}"
+}
+
+build_kernel(){
+  echo "${BGREEN}***** Compiling kernel *****${STD}"
+  [ ! -d "$OUT_DIR" ] && mkdir $OUT_DIR
+  make -j$(nproc) -C $(pwd) O=$(pwd)/out $KERNEL_MAKE_ENV kalama-gki_defconfig
+  make -j$(nproc) -C $(pwd) O=$(pwd)/out $KERNEL_MAKE_ENV
+
+  [ -e $OUT_DIR/arch/arm64/boot/Image.gz ] && cp $OUT_DIR/arch/arm64/boot/Image.gz $OUT_DIR/Image.gz
+  if [ -e $OUT_DIR/arch/arm64/boot/Image ]; then
+    cp $OUT_DIR/arch/arm64/boot/Image $OUT_DIR/Image
+
+    echo "${BGREEN}***** Ready to Roar *****${STD}"
+  else
+    echo 'return to Main menu' 'Kernel STUCK in BUILD!, '
+  fi
+}
+
+regen(){
+  make -j$(nproc) -C $(pwd) O=$(pwd)/out $KERNEL_MAKE_ENV oldconfig
+  cp out/.config arch/arm64/configs/kalama-gki_defconfig
+}
+
+anykernel3(){
+  if [ -e $OUT_DIR/arch/arm64/boot/Image ]; then
+    cd $PARENT_DIR/AnyKernel3
+    cp $OUT_DIR/arch/arm64/boot/Image zImage
+    zip -r9 $PARENT_DIR/dm3q_kernel_`cat $OUT_DIR/include/config/kernel.release`_`date '+%Y_%m_%d'`.zip * -x .git README.md *placeholder
+    cd $DIR
+  else
+    echo 'Build kernel first, '
+  fi
+}
+
+if [ "$1" == "0" ]; then
+   regen
+else
+   build_kernel
+   anykernel3
+fi
