@@ -5584,6 +5584,7 @@ typedef enum {
 	PDEV_PARAM(pdev_param_btcoex_cfg, UNAVAILABLE_PARAM),
 	PDEV_PARAM(pdev_param_soft_tx_chain_mask, PDEV_PARAM_TX_CHAIN_MASK),
 	PDEV_PARAM(pdev_param_enable_peer_retry_stats, UNAVAILABLE_PARAM),
+	PDEV_PARAM(pdev_param_pcie_config, PDEV_PARAM_PCIE_CONFIG),
 	pdev_param_max,
 } wmi_conv_pdev_params_id;
 
@@ -5898,6 +5899,8 @@ typedef enum {
 	VDEV_PARAM(vdev_param_ap_keepalive_max_idle_inactive_secs,
 		   VDEV_PARAM_AP_KEEPALIVE_MAX_IDLE_INACTIVE_TIME_SECS),
 	VDEV_PARAM(vdev_param_set_extra_eht_ltf, VDEV_PARAM_EXTRA_EHT_LTF),
+	VDEV_PARAM(vdev_param_chwidth_with_notify,
+		   VDEV_PARAM_CHWIDTH_WITH_NOTIFY),
 	vdev_param_max,
 } wmi_conv_vdev_param_id;
 
@@ -6244,6 +6247,9 @@ typedef enum {
 	wmi_service_obss_per_packet_sr_support,
 #endif
 	wmi_service_wpa3_sha384_roam_support,
+	wmi_service_cca_busy_info_for_each_20mhz,
+	wmi_service_vdev_param_chwidth_with_notify_support,
+
 	wmi_service_self_mld_roam_between_dbs_and_hbs,
 	wmi_services_max,
 } wmi_conv_service_ids;

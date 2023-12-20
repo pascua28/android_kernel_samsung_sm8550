@@ -581,8 +581,11 @@ int athdiag_procfs_init(void *scn)
 		return -ENOMEM;
 	}
 
-	proc_file = proc_create_data(PROCFS_NAME, 0600, proc_dir,
-				     &athdiag_fops, (void *)scn);
+#ifdef CONFIG_SEC
+	proc_file = proc_create_data(PROCFS_NAME, 0666, proc_dir, &athdiag_fops, (void *)scn);
+#else
+	proc_file = proc_create_data(PROCFS_NAME, 0600, proc_dir, &athdiag_fops, (void *)scn);
+#endif
 	if (!proc_file) {
 		remove_proc_entry(PROCFS_NAME, proc_dir);
 		hif_err("Could not initialize /proc/%s", PROCFS_NAME);

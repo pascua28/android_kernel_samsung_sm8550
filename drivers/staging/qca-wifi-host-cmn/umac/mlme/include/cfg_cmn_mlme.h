@@ -47,12 +47,14 @@
 
 /*
  * <ini>
- * mlme_11be_target_capab - Flag to check the target capability for 11be
+ * enable_11be - Ini to enable/disable 11BE feature capability
  * @Min: false
  * @Max: true
- * @Default: false
+ * @Default: true
  *
- * This flag helps in confirming whether 11be is supported by the target.
+ * This ini is used to enable/disable 11be feature capability.
+ * 0 - Disable 11be feature
+ * 1 - Enable 11be feature
  *
  * Related: None
  *
@@ -62,13 +64,13 @@
  *
  * </ini>
  */
-#define CFG_MLME_11BE_TARGET_CAPAB CFG_UINT( \
-	"mlme_11be_target_capab",\
+#define CFG_ENABLE_11BE CFG_INI_UINT( \
+	"enable_11be",\
 	0, \
 	1, \
 	1, \
 	CFG_VALUE_OR_DEFAULT, \
-	"11be is supported by target")
+	"11be enable/disable support")
 
 #ifdef WLAN_FEATURE_11BE
 /*
@@ -130,7 +132,7 @@
 
 #define CFG_CMN_MLME_ALL \
 	CFG(CFG_MLME_MAX_CHAN_SWITCH_IE_ENABLE) \
-	CFG(CFG_MLME_11BE_TARGET_CAPAB) \
+	CFG(CFG_ENABLE_11BE) \
 	CFG(CFG_MLME_MLO_RECONFIG_REASSOC_ENABLE) \
 	CFG_MLME_11BE_ALL
 

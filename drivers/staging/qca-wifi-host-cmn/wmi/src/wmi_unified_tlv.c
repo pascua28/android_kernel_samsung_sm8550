@@ -432,6 +432,7 @@ static const uint32_t pdev_param_tlv[] = {
 	PARAM_MAP(pdev_param_cts2self_for_p2p_go_config,
 		  PDEV_PARAM_CTS2SELF_FOR_P2P_GO_CONFIG),
 	PARAM_MAP(pdev_param_txpower_reason_sar, PDEV_PARAM_TXPOWER_REASON_SAR),
+	PARAM_MAP(pdev_param_pcie_config, PDEV_PARAM_PCIE_CONFIG),
 };
 
 /* Populate vdev_param array whose index is host param, value is target param */
@@ -3802,6 +3803,12 @@ static inline void copy_scan_event_cntrl_flags(
 	if (param->scan_f_en_ie_allowlist_in_probe)
 		cmd->scan_ctrl_flags |=
 			WMI_SCAN_ENABLE_IE_WHTELIST_IN_PROBE_REQ;
+	if (param->scan_f_pause_home_channel)
+		cmd->scan_ctrl_flags |=
+			WMI_SCAN_FLAG_PAUSE_HOME_CHANNEL;
+	if (param->scan_f_report_cca_busy_for_each_20mhz)
+		cmd->scan_ctrl_flags |=
+			WMI_SCAN_FLAG_REPORT_CCA_BUSY_FOREACH_20MHZ;
 
 	/* for adaptive scan mode using 3 bits (21 - 23 bits) */
 	WMI_SCAN_SET_DWELL_MODE(cmd->scan_ctrl_flags,
@@ -21459,6 +21466,10 @@ static void populate_tlv_service(uint32_t *wmi_service)
 #endif
 	wmi_service[wmi_service_wpa3_sha384_roam_support] =
 			WMI_SERVICE_WMI_SERVICE_WPA3_SHA384_ROAM_SUPPORT;
+	wmi_service[wmi_service_cca_busy_info_for_each_20mhz] =
+			WMI_SERVICE_CCA_BUSY_INFO_FOREACH_20MHZ;
+	wmi_service[wmi_service_vdev_param_chwidth_with_notify_support] =
+			WMI_SERVICE_VDEV_PARAM_CHWIDTH_WITH_NOTIFY_SUPPORT;
 	wmi_service[wmi_service_self_mld_roam_between_dbs_and_hbs] =
 			WMI_SERVICE_SELF_MLD_ROAM_BETWEEN_DBS_AND_HBS;
 }

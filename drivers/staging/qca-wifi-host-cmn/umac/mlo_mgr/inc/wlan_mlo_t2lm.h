@@ -627,10 +627,23 @@ QDF_STATUS wlan_get_t2lm_mapping_status(struct wlan_objmgr_vdev *vdev,
  *
  * Return QDF_STATUS
  */
+
+#ifdef WLAN_FEATURE_11BE_MLO_ADV_FEATURE
 QDF_STATUS
 wlan_send_peer_level_tid_to_link_mapping(struct wlan_objmgr_vdev *vdev,
 					 struct wlan_objmgr_peer *peer);
 
+/**
+ * wlan_clear_peer_level_tid_to_link_mapping() - API to clear peer level T2LM
+ * info negotiated using action frames to FW.
+ *
+ * @vdev: Pointer to vdev
+ *
+ * Return: none
+ */
+void
+wlan_clear_peer_level_tid_to_link_mapping(struct wlan_objmgr_vdev *vdev);
+#endif /* WLAN_FEATURE_11BE_MLO_ADV_FEATURE */
 #else
 static inline QDF_STATUS wlan_mlo_parse_t2lm_ie(
 	struct wlan_t2lm_onging_negotiation_info *t2lm, uint8_t *ie)
@@ -760,6 +773,11 @@ wlan_send_peer_level_tid_to_link_mapping(struct wlan_objmgr_vdev *vdev,
 					 struct wlan_objmgr_peer *peer)
 {
 	return QDF_STATUS_SUCCESS;
+}
+
+static inline void
+wlan_clear_peer_level_tid_to_link_mapping(struct wlan_objmgr_vdev *vdev)
+{
 }
 #endif /* WLAN_FEATURE_11BE */
 #endif /* _WLAN_MLO_T2LM_H_ */
