@@ -2015,7 +2015,16 @@ static int marshal_out_tzcb_req(const struct smcinvoke_accept *user_req,
 	struct smcinvoke_tzcb_req *tzcb_req = cb_txn->cb_req;
 	union smcinvoke_tz_args *tz_args = tzcb_req->args;
 
-	release_tzhandles(&cb_txn->cb_req->hdr.tzhandle, 1);
+	/* We assume 'marshal_in_tzcb_req' increases the ref-count of the CBOBJs.
+	 * It should be the case for mem-obj as well. However, it does not do that.
+	 * It is easier to filter out the 'release_tzhandles' for mem-obj here rather
+	 * than increases its ref-count on 'marshal_in_tzcb_req'. Because, there is no
+	 * reliable error handling and cleanup in 'marshal_in_tzcb_req'. So if it fails
+	 * mem-obj may not get released.  **/
+
+	if (!TZHANDLE_IS_MEM_OBJ(cb_txn->cb_req->hdr.tzhandle))
+		release_tzhandles(&cb_txn->cb_req->hdr.tzhandle, 1);
+
 	tzcb_req->result = user_req->result;
         /* Return without marshaling user args if destination callback invocation was
            unsuccessful. */
