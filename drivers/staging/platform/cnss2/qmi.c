@@ -638,6 +638,44 @@ out:
 	return ret;
 }
 
+#ifdef CONFIG_SEC_SS_CNSS_FEATURE_SYSFS
+extern int ant_from_macloader;
+
+void cnss_add_ss_naming_rule(struct cnss_plat_data *plat_priv,
+				char *filename)
+{
+	char ant[3];
+	const char *postfix = "";
+	int len = 0;
+
+	cnss_pr_err("ant_from_macloader %d\n", ant_from_macloader);
+	/*
+		ant_from_macloader
+		1: chain 1 enabled & chain2 disabled bdf
+		2: chain 1 disabled & chain2 enabled bdf
+		10: GTX disabled bdf
+	*/
+	if (ant_from_macloader == 1 || ant_from_macloader == 2
+		|| ant_from_macloader == 10) {
+		snprintf(ant, 3, "%d", ant_from_macloader);
+		strncat(filename, ant, strlen(ant));
+	}
+
+	// attach postfix if it's defined in dtsi
+	of_property_read_string(plat_priv->plat_dev->dev.of_node,
+		"qcom,bdf-postfix-name", &postfix);
+	len = strlen(postfix);
+
+	if (len == 0)
+		cnss_pr_dbg("Failed to get qcom,bdf-postfix-name\n");
+	else if (len + strlen(filename) > MAX_FIRMWARE_NAME_LEN )
+		cnss_pr_err("Over MAX_FIRMWARE_NAME_LEN\n");
+	else
+		strncat(filename, postfix, len);
+
+	return;
+}
+#endif /* CONFIG_SEC_SS_CNSS_FEATURE_SYSFS */
 static char *cnss_bdf_type_to_str(enum cnss_bdf_type bdf_type)
 {
 	switch (bdf_type) {
@@ -685,6 +723,9 @@ static int cnss_get_bdf_file_name(struct cnss_plat_data *plat_priv,
 				 plat_priv->board_info.board_id >> 8 & 0xFF,
 				 plat_priv->board_info.board_id & 0xFF);
 		}
+#ifdef CONFIG_SEC_SS_CNSS_FEATURE_SYSFS
+		cnss_add_ss_naming_rule(plat_priv, filename_tmp);
+#endif /* CONFIG_SEC_SS_CNSS_FEATURE_SYSFS */
 		break;
 	case CNSS_BDF_BIN:
 		if (plat_priv->board_info.board_id == 0xFF) {

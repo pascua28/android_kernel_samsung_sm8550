@@ -589,8 +589,12 @@ struct cnss_plat_data {
 	int pdc_init_table_len, vreg_pdc_map_len, pmu_vreg_map_len;
 	bool adsp_pc_enabled;
 	u64 feature_list;
-	u32 dt_type;
+#ifdef CONFIG_SEC_SS_CNSS_FEATURE_SYSFS
+	u8 dump_mode;
 	struct kobject *wifi_kobj;
+	struct completion macloader_done;
+#endif /* CONFIG_SEC_SS_CNSS_FEATURE_SYSFS */
+	u32 dt_type;
 	u16 hang_event_data_len;
 	u32 hang_data_addr_offset;
 	/* bitmap to detect FEM combination */
