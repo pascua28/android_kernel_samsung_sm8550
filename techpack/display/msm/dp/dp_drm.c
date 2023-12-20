@@ -14,6 +14,9 @@
 #include "dp_drm.h"
 #include "dp_mst_drm.h"
 #include "dp_debug.h"
+#if defined(CONFIG_SECDP)
+#include "secdp.h"
+#endif
 
 #define DP_MST_DEBUG(fmt, ...) DP_DEBUG(fmt, ##__VA_ARGS__)
 
@@ -85,6 +88,8 @@ static void dp_bridge_pre_enable(struct drm_bridge *drm_bridge)
 		return;
 	}
 
+	DP_ENTER("\n");
+
 	bridge = to_dp_bridge(drm_bridge);
 	dp = bridge->display;
 
@@ -133,6 +138,8 @@ static void dp_bridge_enable(struct drm_bridge *drm_bridge)
 		return;
 	}
 
+	DP_ENTER("\n");
+
 	bridge = to_dp_bridge(drm_bridge);
 	if (!bridge->connector) {
 		DP_ERR("Invalid connector\n");
@@ -162,6 +169,8 @@ static void dp_bridge_disable(struct drm_bridge *drm_bridge)
 		DP_ERR("Invalid params\n");
 		return;
 	}
+
+	DP_ENTER("\n");
 
 	bridge = to_dp_bridge(drm_bridge);
 	if (!bridge->connector) {
@@ -201,6 +210,8 @@ static void dp_bridge_post_disable(struct drm_bridge *drm_bridge)
 		DP_ERR("Invalid params\n");
 		return;
 	}
+
+	DP_ENTER("\n");
 
 	bridge = to_dp_bridge(drm_bridge);
 	if (!bridge->connector) {
@@ -340,7 +351,7 @@ int dp_connector_set_colorspace(struct drm_connector *connector,
 
 	sde_conn = to_sde_connector(connector);
 	if (!sde_conn->drv_panel) {
-		pr_err("invalid dp panel\n");
+		DP_ERR("invalid dp panel\n");
 		return -EINVAL;
 	}
 

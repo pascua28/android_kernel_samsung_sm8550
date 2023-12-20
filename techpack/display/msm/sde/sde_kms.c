@@ -67,6 +67,10 @@
 #define CREATE_TRACE_POINTS
 #include "sde_trace.h"
 
+#if IS_ENABLED(CONFIG_DISPLAY_SAMSUNG)
+#include "ss_dsi_panel_debug.h"
+#endif
+
 /* defines for secure channel call */
 #define MEM_PROTECT_SD_CTRL_SWITCH 0x18
 #define MDP_DEVICE_ID            0x1A
@@ -170,6 +174,7 @@ static int _sde_debugfs_init(struct sde_kms *sde_kms)
 		debugfs_create_u32("qdss", 0600, debugfs_root,
 				(u32 *)&sde_kms->qdss_enabled);
 
+	sde_kms->pm_suspend_clk_dump = 1;
 	debugfs_create_u32("pm_suspend_clk_dump", 0600, debugfs_root,
 			(u32 *)&sde_kms->pm_suspend_clk_dump);
 	debugfs_create_u32("hw_fence_status", 0600, debugfs_root,
@@ -503,6 +508,7 @@ static int _sde_kms_sui_misr_ctrl(struct sde_kms *sde_kms,
 	int ret;
 
 	if (enable) {
+		SDE_EVT32(0xEEEEEEEE);
 		ret = pm_runtime_resume_and_get(sde_kms->dev->dev);
 		if (ret < 0) {
 			SDE_ERROR("failed to enable power resource %d\n", ret);
@@ -765,6 +771,14 @@ static int _sde_kms_release_shared_buffer(unsigned int mem_addr,
 
 	/* leave ramdump memory only if base address matches */
 	if (ramdump_base == mem_addr &&
+#if IS_ENABLED(CONFIG_DISPLAY_SAMSUNG) && IS_ENABLED(CONFIG_SEC_DEBUG)
+			/* case 1) upload mode: release splash memory except disp_rdump_memory
+			 *		   which is used for framebuffer in upload mode bootloader
+			 * case 2) None-upload mode: release whole splash memory
+			 *		   which is used for framebuffer in normal booitng mode bootloader
+			 */
+			sec_debug_is_enabled() &&
+#endif
 			ramdump_buffer_size <= splash_buffer_size) {
 		mem_addr +=  ramdump_buffer_size;
 		splash_buffer_size -= ramdump_buffer_size;
@@ -780,6 +794,11 @@ static int _sde_kms_release_shared_buffer(unsigned int mem_addr,
 	}
 	for (pfn_idx = pfn_start; pfn_idx < pfn_end; pfn_idx++)
 		free_reserved_page(pfn_to_page(pfn_idx));
+
+#if IS_ENABLED(CONFIG_DISPLAY_SAMSUNG) && IS_ENABLED(CONFIG_SEC_DEBUG)
+	SDE_INFO("release splash buffer: addr: %lx, size: %x, sec_debug: %d\n",
+			mem_addr, splash_buffer_size, sec_debug_is_enabled());
+#endif
 
 	return ret;
 
@@ -1718,6 +1737,10 @@ static void sde_kms_wait_for_commit_done(struct msm_kms *kms,
 					DRMID(crtc), DRMID(encoder), cwb_disabling, ret);
 			SDE_EVT32(DRMID(crtc), DRMID(encoder), cwb_disabling,
 					ret, SDE_EVTLOG_ERROR);
+#if IS_ENABLED(CONFIG_DISPLAY_SAMSUNG)
+			if (!ss_is_panel_dead(crtc->index))
+				SDE_DBG_DUMP(SDE_DBG_BUILT_IN_ALL, "panic");
+#endif
 			sde_crtc_request_frame_reset(crtc, encoder);
 			break;
 		}
@@ -1858,9 +1881,15 @@ static void _sde_kms_release_displays(struct sde_kms *sde_kms)
 	sde_kms->wb_displays = NULL;
 	sde_kms->wb_display_count = 0;
 
+#if IS_ENABLED(CONFIG_DISPLAY_SAMSUNG)
+	sde_kms->dsi_display_count = 0;
+	kfree(sde_kms->dsi_displays);
+	sde_kms->dsi_displays = NULL;
+#else
 	kfree(sde_kms->dsi_displays);
 	sde_kms->dsi_displays = NULL;
 	sde_kms->dsi_display_count = 0;
+#endif
 }
 
 /**
@@ -2348,6 +2377,11 @@ void sde_kms_timeline_status(struct drm_device *dev)
 	mutex_unlock(&dev->mode_config.mutex);
 }
 
+#if IS_ENABLED(CONFIG_DISPLAY_SAMSUNG)
+int sde_core_perf_sysfs_init(struct sde_kms *sde_kms);
+int sde_core_perf_sysfs_deinit(struct sde_kms *sde_kms);
+#endif
+
 static int sde_kms_postinit(struct msm_kms *kms)
 {
 	struct sde_kms *sde_kms = to_sde_kms(kms);
@@ -2389,6 +2423,12 @@ static int sde_kms_postinit(struct msm_kms *kms)
 	rc = _sde_debugfs_init(sde_kms);
 	if (rc)
 		SDE_ERROR("sde_debugfs init failed: %d\n", rc);
+
+#if IS_ENABLED(CONFIG_DISPLAY_SAMSUNG)
+	rc = sde_core_perf_sysfs_init(sde_kms);
+	if (rc)
+		SDE_ERROR("sde_core_sysfs init failed: %d\n", rc);
+#endif
 
 	drm_for_each_crtc(crtc, dev)
 		sde_crtc_post_init(dev, crtc);
@@ -2442,6 +2482,10 @@ static void _sde_kms_hw_destroy(struct sde_kms *sde_kms,
 	_sde_kms_release_displays(sde_kms);
 
 	_sde_kms_unmap_all_splash_regions(sde_kms);
+
+#if IS_ENABLED(CONFIG_DISPLAY_SAMSUNG)
+	sde_core_perf_sysfs_deinit(sde_kms);
+#endif
 
 	if (sde_kms->catalog) {
 		for (i = 0; i < sde_kms->catalog->vbif_count; i++) {
@@ -4077,8 +4121,12 @@ static void _sde_kms_pm_suspend_idle_helper(struct sde_kms *sde_kms,
 	struct drm_device *ddev = dev_get_drvdata(dev);
 	struct drm_connector *conn;
 	struct drm_connector_list_iter conn_iter;
+	struct sde_encoder_virt *sde_enc;
 	struct msm_drm_private *priv = sde_kms->dev->dev_private;
 
+#if IS_ENABLED(CONFIG_DISPLAY_SAMSUNG)
+	SS_XLOG_VSYNC(__LINE__, atomic_read(&dev->power.usage_count));
+#endif
 	drm_connector_list_iter_begin(ddev, &conn_iter);
 	drm_for_each_connector_iter(conn, &conn_iter) {
 		uint64_t lp;
@@ -4090,6 +4138,7 @@ static void _sde_kms_pm_suspend_idle_helper(struct sde_kms *sde_kms,
 		if (sde_encoder_in_clone_mode(conn->encoder))
 			continue;
 
+		sde_enc = to_sde_encoder_virt(conn->encoder);
 		crtc_id = drm_crtc_index(conn->state->crtc);
 		if (priv->disp_thread[crtc_id].thread)
 			kthread_flush_worker(
@@ -4097,6 +4146,9 @@ static void _sde_kms_pm_suspend_idle_helper(struct sde_kms *sde_kms,
 
 		ret = sde_encoder_wait_for_event(conn->encoder,
 						MSM_ENC_TX_COMPLETE);
+#if IS_ENABLED(CONFIG_DISPLAY_SAMSUNG)
+		SS_XLOG_VSYNC(__LINE__, atomic_read(&dev->power.usage_count), sde_enc->vblank_enabled);
+#endif
 		if (ret && ret != -EWOULDBLOCK) {
 			SDE_ERROR(
 				"[conn: %d] wait for commit done returned %d\n",
@@ -4106,6 +4158,26 @@ static void _sde_kms_pm_suspend_idle_helper(struct sde_kms *sde_kms,
 				kthread_flush_worker(
 					&priv->event_thread[crtc_id].worker);
 			sde_encoder_idle_request(conn->encoder);
+		}
+
+#if IS_ENABLED(CONFIG_DISPLAY_SAMSUNG)
+		SS_XLOG_VSYNC(__LINE__, atomic_read(&dev->power.usage_count), sde_enc->vblank_enabled);
+#endif
+		if (sde_enc->vblank_enabled) {
+#if IS_ENABLED(CONFIG_DISPLAY_SAMSUNG)
+			SS_XLOG_VSYNC(__LINE__, atomic_read(&dev->power.usage_count), sde_enc->vblank_enabled);
+#endif
+			sde_encoder_wait_for_event(conn->encoder, MSM_ENC_VBLANK);
+			if (priv->event_thread[crtc_id].thread) {
+#if IS_ENABLED(CONFIG_DISPLAY_SAMSUNG)
+				SS_XLOG_VSYNC(__LINE__, atomic_read(&dev->power.usage_count), sde_enc->vblank_enabled);
+#endif
+				kthread_flush_worker(
+					&priv->event_thread[crtc_id].worker);
+#if IS_ENABLED(CONFIG_DISPLAY_SAMSUNG)
+				SS_XLOG_VSYNC(__LINE__, atomic_read(&dev->power.usage_count), sde_enc->vblank_enabled);
+#endif
+			}
 		}
 	}
 	drm_connector_list_iter_end(&conn_iter);
@@ -4143,6 +4215,9 @@ static int sde_kms_pm_suspend(struct device *dev)
 		return -EINVAL;
 
 	sde_kms = to_sde_kms(ddev_to_msm_kms(ddev));
+#if IS_ENABLED(CONFIG_DISPLAY_SAMSUNG)
+	SS_XLOG_VSYNC(__LINE__, atomic_read(&dev->power.usage_count));
+#endif
 	SDE_EVT32(0);
 
 	/* disable hot-plug polling */
@@ -4200,7 +4275,8 @@ retry:
 			continue;
 
 		lp = sde_connector_get_lp(conn);
-		if (lp == SDE_MODE_DPMS_LP1) {
+		if (lp == SDE_MODE_DPMS_LP1 &&
+			!sde_encoder_check_curr_mode(conn->encoder, MSM_DISPLAY_VIDEO_MODE)) {
 			/* transition LP1->LP2 on pm suspend */
 			ret = sde_connector_set_property_for_commit(conn, state,
 					CONNECTOR_PROP_LP, SDE_MODE_DPMS_LP2);
@@ -4210,9 +4286,18 @@ retry:
 				drm_connector_list_iter_end(&conn_iter);
 				goto unlock;
 			}
+#if IS_ENABLED(CONFIG_DISPLAY_SAMSUNG)
+			SS_XLOG_VSYNC(__LINE__, atomic_read(&dev->power.usage_count));
+#endif
 		}
 
-		if (lp != SDE_MODE_DPMS_LP2) {
+#if IS_ENABLED(CONFIG_DISPLAY_SAMSUNG)
+		if (lp == SDE_MODE_DPMS_LP2)
+			SS_XLOG_VSYNC(__LINE__, atomic_read(&dev->power.usage_count));
+#endif
+
+		if (lp != SDE_MODE_DPMS_LP2 ||
+			sde_encoder_check_curr_mode(conn->encoder, MSM_DISPLAY_VIDEO_MODE)) {
 			/* force CRTC to be inactive */
 			crtc_state = drm_atomic_get_crtc_state(state,
 					conn->state->crtc);
@@ -4224,7 +4309,8 @@ retry:
 				goto unlock;
 			}
 
-			if (lp != SDE_MODE_DPMS_LP1)
+			if (lp != SDE_MODE_DPMS_LP1 ||
+				sde_encoder_check_curr_mode(conn->encoder, MSM_DISPLAY_VIDEO_MODE))
 				crtc_state->active = false;
 			++num_crtcs;
 		}
@@ -4233,6 +4319,9 @@ retry:
 
 	/* check for nothing to do */
 	if (num_crtcs == 0) {
+#if IS_ENABLED(CONFIG_DISPLAY_SAMSUNG)
+		SS_XLOG_VSYNC(__LINE__, atomic_read(&dev->power.usage_count));
+#endif
 		DRM_DEBUG("all crtcs are already in the off state\n");
 		sde_kms->suspend_block = true;
 		_sde_kms_pm_suspend_idle_helper(sde_kms, dev);
@@ -4278,6 +4367,9 @@ unlock:
 	pm_runtime_put_sync(dev);
 	pm_runtime_get_noresume(dev);
 
+#if IS_ENABLED(CONFIG_DISPLAY_SAMSUNG)
+	SS_XLOG_VSYNC(atomic_read(&dev->power.usage_count));
+#endif
 	/* dump clock state before entering suspend */
 	if (sde_kms->pm_suspend_clk_dump)
 		_sde_kms_dump_clks_state(sde_kms);
@@ -5369,6 +5461,7 @@ int sde_kms_vm_trusted_resource_init(struct sde_kms *sde_kms,
 	 * fill-in vote for the continuous splash hanodff path, which will be
 	 * removed on the successful first commit.
 	 */
+	SDE_EVT32(0xEEEEEEEE);
 	ret = pm_runtime_resume_and_get(sde_kms->dev->dev);
 	if (ret < 0) {
 		SDE_ERROR("failed to enable power resource %d\n", ret);

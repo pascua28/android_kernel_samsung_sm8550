@@ -94,6 +94,10 @@ struct sde_edid_ctrl {
 	char vendor_id[EDID_VENDOR_ID_SIZE];
 	struct sde_edid_sink_caps sink_caps;
 	struct sde_edid_hdr_data hdr_data;
+#if defined(CONFIG_SECDP)
+	int audio_channel_info;
+	bool custom_edid;	/*SECDP_SELF_TEST*/
+#endif
 };
 
 /**

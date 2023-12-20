@@ -92,6 +92,27 @@
 	} while (0)
 
 static DEFINE_MUTEX(msm_release_lock);
+#if IS_ENABLED(CONFIG_DISPLAY_SAMSUNG)
+static BLOCKING_NOTIFIER_HEAD(msm_drm_notifier_list);
+
+int msm_drm_register_notifier_client(struct notifier_block *nb)
+{
+	return blocking_notifier_chain_register(&msm_drm_notifier_list, nb);
+}
+EXPORT_SYMBOL(msm_drm_register_notifier_client);
+
+int msm_drm_unregister_notifier_client(struct notifier_block *nb)
+{
+	return blocking_notifier_chain_unregister(&msm_drm_notifier_list, nb);
+}
+EXPORT_SYMBOL(msm_drm_unregister_notifier_client);
+
+int __msm_drm_notifier_call_chain(unsigned long event, void *data)
+{
+	return blocking_notifier_call_chain(&msm_drm_notifier_list,
+					event, data);
+}
+#endif
 
 static void msm_fb_output_poll_changed(struct drm_device *dev)
 {
@@ -1063,6 +1084,11 @@ void msm_atomic_flush_display_threads(struct msm_drm_private *priv)
  * DRM operations:
  */
 
+#if IS_ENABLED(CONFIG_DISPLAY_SAMSUNG)
+struct msm_file_private *msm_ioctl_power_ctrl_ctx;
+DEFINE_MUTEX(msm_ioctl_power_ctrl_ctx_lock);
+#endif
+
 static int context_init(struct drm_device *dev, struct drm_file *file)
 {
 	struct msm_file_private *ctx;
@@ -1094,6 +1120,14 @@ static int msm_open(struct drm_device *dev, struct drm_file *file)
 
 static void context_close(struct msm_file_private *ctx)
 {
+
+#if IS_ENABLED(CONFIG_DISPLAY_SAMSUNG)
+	mutex_lock(&msm_ioctl_power_ctrl_ctx_lock);
+	if (msm_ioctl_power_ctrl_ctx == ctx)
+		msm_ioctl_power_ctrl_ctx = NULL;
+	mutex_unlock(&msm_ioctl_power_ctrl_ctx_lock);
+#endif
+
 	kfree(ctx);
 }
 
@@ -1717,6 +1751,12 @@ int msm_ioctl_power_ctrl(struct drm_device *dev, void *data,
 
 	priv = dev->dev_private;
 
+#if IS_ENABLED(CONFIG_DISPLAY_SAMSUNG)
+	mutex_lock(&msm_ioctl_power_ctrl_ctx_lock);
+	msm_ioctl_power_ctrl_ctx = ctx;
+	mutex_unlock(&msm_ioctl_power_ctrl_ctx_lock);
+#endif
+
 	mutex_lock(&ctx->power_lock);
 
 	old_cnt = ctx->enable_refcnt;
@@ -1744,7 +1784,7 @@ int msm_ioctl_power_ctrl(struct drm_device *dev, void *data,
 			rc = 0;
 	}
 
-	pr_debug("pid %d enable %d, refcnt %d, vote_req %d\n",
+	pr_info("pid %d enable %d, refcnt %d, vote_req %d\n",
 			current->pid, power_ctrl->enable, ctx->enable_refcnt,
 			vote_req);
 	SDE_EVT32(current->pid, power_ctrl->enable, ctx->enable_refcnt,
@@ -2061,6 +2101,12 @@ static int add_display_components(struct device *dev,
 			node = of_parse_phandle(np, "connectors", i);
 			if (!node)
 				break;
+#ifndef CONFIG_SECDP
+			if (!strncmp(node->name, "qcom,dp_display", 15)) {
+				pr_info("[drm-dp] disabled displayport!\n");
+				continue;
+			}
+#endif
 
 			component_match_add(dev, matchptr, compare_of, node);
 		}
@@ -2349,6 +2395,12 @@ static void __exit msm_drm_unregister(void)
 
 module_init(msm_drm_register);
 module_exit(msm_drm_unregister);
+
+#if IS_ENABLED(CONFIG_DISPLAY_SAMSUNG)
+#if IS_ENABLED(CONFIG_REGULATOR_S2DOS05)
+MODULE_SOFTDEP("pre: s2dos05-regulator");
+#endif
+#endif
 
 MODULE_AUTHOR("Rob Clark <robdclark@gmail.com");
 MODULE_DESCRIPTION("MSM DRM Driver");

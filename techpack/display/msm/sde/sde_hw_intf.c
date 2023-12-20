@@ -698,6 +698,8 @@ static int sde_hw_intf_setup_te_config(struct sde_hw_intf *intf,
 			(te->start_pos + te->sync_threshold_start + 1));
 	spin_unlock(&tearcheck_spinlock);
 
+	SDE_EVT32_PICK(te->start_pos, te->sync_threshold_start);
+
 	return 0;
 }
 
@@ -781,6 +783,38 @@ static int sde_hw_intf_enable_te(struct sde_hw_intf *intf, bool enable)
 	return 0;
 }
 
+#if IS_ENABLED(CONFIG_DISPLAY_SAMSUNG)
+static u32 ss_hw_intf_get_start(struct sde_hw_intf *intf)
+{
+	struct sde_hw_blk_reg_map *c;
+
+	if (!intf)
+		return 0;
+
+	c = &intf->hw;
+	return SDE_REG_READ(c, INTF_TEAR_START_POS);
+}
+static void ss_hw_intf_update_start(struct sde_hw_intf *intf,
+		struct sde_hw_tear_check *te)
+{
+	struct sde_hw_blk_reg_map *c;
+	int cfg;
+
+	if (!intf || !te)
+		return;
+
+	c = &intf->hw;
+	cfg = SDE_REG_READ(c, INTF_TEAR_SYNC_THRESH);
+	cfg &= ~0xFFFF;
+	cfg |= te->sync_threshold_start;
+	SDE_REG_WRITE(c, INTF_TEAR_SYNC_THRESH, cfg);
+
+	SDE_REG_WRITE(c, INTF_TEAR_START_POS, te->start_pos);
+
+	SDE_EVT32_PICK(te->start_pos, te->sync_threshold_start);
+}
+#endif
+
 static void sde_hw_intf_update_te(struct sde_hw_intf *intf,
 		struct sde_hw_tear_check *te)
 {
@@ -795,6 +829,8 @@ static void sde_hw_intf_update_te(struct sde_hw_intf *intf,
 	cfg &= ~0xFFFF;
 	cfg |= te->sync_threshold_start;
 	SDE_REG_WRITE(c, INTF_TEAR_SYNC_THRESH, cfg);
+
+	SDE_EVT32_PICK(te->sync_threshold_start);
 }
 
 static int sde_hw_intf_connect_external_te(struct sde_hw_intf *intf,
@@ -867,6 +903,19 @@ static int sde_hw_intf_v1_check_and_reset_tearcheck(struct sde_hw_intf *intf,
 	return 0;
 }
 
+static void sde_hw_intf_reset_tear_init_line_val(struct sde_hw_intf *intf,
+		u32 init_val)
+{
+	struct sde_hw_blk_reg_map *c;
+
+	if (!intf || !init_val)
+		return;
+
+	c = &intf->hw;
+
+	SDE_REG_WRITE(c, INTF_TEAR_SYNC_WRCOUNT, (init_val & 0xFFFF));
+}
+
 static void sde_hw_intf_override_tear_rd_ptr_val(struct sde_hw_intf *intf,
 		u32 adjusted_rd_ptr_val)
 {
@@ -880,6 +929,9 @@ static void sde_hw_intf_override_tear_rd_ptr_val(struct sde_hw_intf *intf,
 	SDE_REG_WRITE(c, INTF_TEAR_SYNC_WRCOUNT, (adjusted_rd_ptr_val & 0xFFFF));
 	/* ensure rd_ptr_val is written */
 	wmb();
+
+
+	SDE_EVT32_PICK(adjusted_rd_ptr_val);
 }
 
 static void sde_hw_intf_vsync_sel(struct sde_hw_intf *intf,
@@ -971,6 +1023,10 @@ static void _setup_intf_ops(struct sde_hw_intf_ops *ops,
 	if (cap & BIT(SDE_INTF_TE)) {
 		ops->setup_tearcheck = sde_hw_intf_setup_te_config;
 		ops->enable_tearcheck = sde_hw_intf_enable_te;
+#if IS_ENABLED(CONFIG_DISPLAY_SAMSUNG)
+		ops->get_start = ss_hw_intf_get_start;
+		ops->update_start = ss_hw_intf_update_start;
+#endif
 		ops->update_tearcheck = sde_hw_intf_update_te;
 		ops->connect_external_te = sde_hw_intf_connect_external_te;
 		ops->get_vsync_info = sde_hw_intf_get_vsync_info;
@@ -982,6 +1038,7 @@ static void _setup_intf_ops(struct sde_hw_intf_ops *ops,
 		ops->vsync_sel = sde_hw_intf_vsync_sel;
 		ops->check_and_reset_tearcheck =
 			sde_hw_intf_v1_check_and_reset_tearcheck;
+		ops->reset_tear_init_line_val = sde_hw_intf_reset_tear_init_line_val;
 		ops->override_tear_rd_ptr_val =
 			sde_hw_intf_override_tear_rd_ptr_val;
 	}

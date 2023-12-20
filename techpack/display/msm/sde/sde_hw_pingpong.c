@@ -188,6 +188,26 @@ static int sde_hw_pp_setup_te_config(struct sde_hw_pingpong *pp,
 	return 0;
 }
 
+#if IS_ENABLED(CONFIG_DISPLAY_SAMSUNG)
+static void ss_hw_pp_update_start(struct sde_hw_pingpong *pp,
+		struct sde_hw_tear_check *te)
+{
+	struct sde_hw_blk_reg_map *c;
+	int cfg;
+
+	if (!pp || !te)
+		return;
+
+	c = &pp->hw;
+	cfg = SDE_REG_READ(c, PP_SYNC_THRESH);
+	cfg &= ~0xFFFF;
+	cfg |= te->sync_threshold_start;
+	SDE_REG_WRITE(c, PP_SYNC_THRESH, cfg);
+
+	SDE_REG_WRITE(c, PP_START_POS, te->start_pos);
+}
+#endif
+
 static void sde_hw_pp_update_te(struct sde_hw_pingpong *pp,
 		struct sde_hw_tear_check *te)
 {
@@ -466,6 +486,9 @@ static void _setup_pingpong_ops(struct sde_hw_pingpong_ops *ops,
 	if (hw_cap->features & BIT(SDE_PINGPONG_TE)) {
 		ops->setup_tearcheck = sde_hw_pp_setup_te_config;
 		ops->enable_tearcheck = sde_hw_pp_enable_te;
+#if IS_ENABLED(CONFIG_DISPLAY_SAMSUNG)
+		ops->update_start = ss_hw_pp_update_start;
+#endif
 		ops->update_tearcheck = sde_hw_pp_update_te;
 		ops->connect_external_te = sde_hw_pp_connect_external_te;
 		ops->get_vsync_info = sde_hw_pp_get_vsync_info;

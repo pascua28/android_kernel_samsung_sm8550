@@ -9,6 +9,10 @@
 #include "dp_debug.h"
 #include "dp_pll.h"
 
+#if defined(CONFIG_SECDP)
+#include <linux/secdp_logger.h>
+#endif
+
 static int dp_pll_fill_io(struct dp_pll *pll)
 {
 	struct dp_parser *parser = pll->parser;

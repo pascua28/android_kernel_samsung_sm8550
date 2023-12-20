@@ -53,6 +53,14 @@ struct sde_hw_pingpong_ops {
 	int (*enable_tearcheck)(struct sde_hw_pingpong *pp,
 			bool enable);
 
+#if IS_ENABLED(CONFIG_DISPLAY_SAMSUNG)
+	/**
+	 * updates tearcheck configuration
+	 */
+	void (*update_start)(struct sde_hw_pingpong *pp,
+			struct sde_hw_tear_check *cfg);
+#endif
+
 	/**
 	 * updates tearcheck configuration
 	 */

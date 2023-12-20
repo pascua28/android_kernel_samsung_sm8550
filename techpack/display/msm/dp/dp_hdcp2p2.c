@@ -17,6 +17,10 @@
 #include "sde_hdcp_2x.h"
 #include "dp_debug.h"
 
+#if defined(CONFIG_SECDP_DBG)
+#include <linux/secdp_logger.h>
+#endif
+
 #define DP_INTR_STATUS2				(0x00000024)
 #define DP_INTR_STATUS3				(0x00000028)
 #define dp_read(offset) readl_relaxed((offset))
@@ -650,6 +654,10 @@ static int dp_hdcp2p2_read_rx_status(struct dp_hdcp2p2_ctrl *ctrl,
 	}
 
 	cp_irq = buf & BIT(2);
+#ifdef SECDP_TEST_HDCP2P2_REAUTH
+	cp_irq = true;
+	DP_DEBUG("[HDCP2P2_REAUTH_TEST]\n");
+#endif
 	DP_DEBUG("cp_irq=0x%x\n", cp_irq);
 	buf = 0;
 
@@ -662,6 +670,9 @@ static int dp_hdcp2p2_read_rx_status(struct dp_hdcp2p2_ctrl *ctrl,
 			goto error;
 		}
 		*rx_status = buf;
+#ifdef SECDP_TEST_HDCP2P2_REAUTH
+		*rx_status = 0x8;
+#endif
 		DP_DEBUG("rx_status=0x%x\n", *rx_status);
 	}
 
@@ -786,6 +797,15 @@ static bool dp_hdcp2p2_supported(void *input)
 		DP_ERR("RxCaps read failed\n");
 		goto error;
 	}
+
+#if defined(CONFIG_SECDP)
+{
+	u32 i;
+
+	for (i = 0; i < DP_HDCP_RXCAPS_LENGTH; i++)
+		DP_DEBUG("rxcaps[%d] 0x%x\n", i, buf[i]);
+}
+#endif
 
 	DP_DEBUG("HDCP_CAPABLE=%lu\n", (buf[2] & BIT(1)) >> 1);
 	DP_DEBUG("VERSION=%d\n", buf[0]);

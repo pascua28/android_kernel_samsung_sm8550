@@ -220,6 +220,7 @@ static void _sde_rm_inc_resource_info_lm(struct sde_rm *rm,
 		if ((!blk2->rsvp || (blk->rsvp && blk2->rsvp->enc_id == blk->rsvp->enc_id)) &&
 				test_bit(lm_cfg->id, &lm_cfg2->lm_pair_mask))
 			set_bit(lm_cfg->merge_3d, &avail_res->merge_3d_mask);
+
 	}
 
 	avail_res->num_3dmux = hweight_long(avail_res->merge_3d_mask);

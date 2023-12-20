@@ -23,8 +23,13 @@
 
 #define SDE_ENCODER_NAME_MAX	16
 
+#if IS_ENABLED(CONFIG_DISPLAY_SAMSUNG)
+/* wait for at most 2 vsync for lowest refresh rate (10hz) */
+#define DEFAULT_KICKOFF_TIMEOUT_MS		200
+#else
 /* wait for at most 2 vsync for lowest refresh rate (24hz) */
 #define DEFAULT_KICKOFF_TIMEOUT_MS		84
+#endif
 
 /* if default timeout fails wait additional time in 1s increments */
 #define EXTENDED_KICKOFF_TIMEOUT_MS      1000
@@ -133,6 +138,7 @@ struct sde_encoder_virt_ops {
  * @update_split_role:		Update the split role of the phys enc
  * @control_te:			Interface to control the vsync_enable status
  * @restore:			Restore all the encoder configs.
+ * @reset_tearcheck_rd_ptr:	Reset the tearcheck rd_ptr_line_count from 0 to init_val
  * @is_autorefresh_enabled:	provides the autorefresh current
  *                              enable/disable state.
  * @get_line_count:		Obtain current internal vertical line count
@@ -189,6 +195,7 @@ struct sde_encoder_phys_ops {
 			enum sde_enc_split_role role);
 	void (*control_te)(struct sde_encoder_phys *phys_enc, bool enable);
 	void (*restore)(struct sde_encoder_phys *phys);
+	void (*reset_tearcheck_rd_ptr)(struct sde_encoder_phys *phys);
 	bool (*is_autorefresh_enabled)(struct sde_encoder_phys *phys);
 	int (*get_line_count)(struct sde_encoder_phys *phys);
 	bool (*wait_dma_trigger)(struct sde_encoder_phys *phys);
@@ -227,6 +234,7 @@ enum sde_intr_idx {
 	INTR_IDX_CTL_START,
 	INTR_IDX_CTL_DONE,
 	INTR_IDX_RDPTR,
+	INTR_IDX_TE_DETECTED,
 	INTR_IDX_AUTOREFRESH_DONE,
 	INTR_IDX_WB_DONE,
 	INTR_IDX_PP1_OVFL,
@@ -877,4 +885,5 @@ void sde_encoder_helper_setup_misr(struct sde_encoder_phys *phys_enc,
 int sde_encoder_helper_collect_misr(struct sde_encoder_phys *phys_enc,
 		bool nonblock, u32 *misr_value);
 
+void sde_rsc_log_vsync_info(struct drm_encoder *drm_enc);
 #endif /* __sde_encoder_phys_H__ */

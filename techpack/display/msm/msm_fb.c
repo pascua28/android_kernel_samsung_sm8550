@@ -28,6 +28,7 @@
 #include "msm_drv.h"
 #include "msm_kms.h"
 #include "msm_gem.h"
+#include "sde_dbg.h"
 
 struct msm_framebuffer {
 	struct drm_framebuffer base;
@@ -319,8 +320,8 @@ int  msm_framebuffer_get_cache_hint(struct drm_framebuffer *fb,
 	return 0;
 }
 
-int msm_fb_obj_get_attrs(struct drm_gem_object *obj,
-		int *fb_ns, int *fb_sec, int *fb_sec_dir)
+int msm_fb_obj_get_attrs(struct drm_gem_object *obj, int *fb_ns,
+		int *fb_sec, int *fb_sec_dir)
 {
 	struct msm_gem_object *msm_obj = to_msm_bo(obj);
 	struct dma_buf *dma_buf;

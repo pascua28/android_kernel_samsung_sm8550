@@ -35,6 +35,9 @@ struct dp_ctrl {
 	void (*set_sim_mode)(struct dp_ctrl *dp_ctrl, bool en);
 	int (*setup_misr)(struct dp_ctrl *dp_ctrl);
 	int (*read_misr)(struct dp_ctrl *dp_ctrl, struct dp_misr40_data *data);
+#if defined(CONFIG_SECDP)
+	bool (*get_link_train_status)(struct dp_ctrl *dp_ctrl);
+#endif
 };
 
 struct dp_ctrl_in {

@@ -32,6 +32,10 @@
 #include "msm_mmu.h"
 #include "sde_dbg.h"
 
+#if IS_ENABLED(CONFIG_DISPLAY_SAMSUNG)
+#include "ss_dsi_panel_common.h"
+#endif
+
 struct msm_smmu_client {
 	struct device *dev;
 	const char *compat;
@@ -255,6 +259,9 @@ static int msm_smmu_map_dma_buf(struct msm_mmu *mmu, struct sg_table *sgt,
 	struct msm_smmu_client *client = msm_smmu_to_client(smmu);
 	unsigned long attrs = 0x0;
 	int ret;
+#if IS_ENABLED(CONFIG_DISPLAY_SAMSUNG)
+	int retry_cnt;
+#endif
 
 	if (!sgt || !client) {
 		DRM_ERROR("sg table is invalid\n");
@@ -268,6 +275,22 @@ static int msm_smmu_map_dma_buf(struct msm_mmu *mmu, struct sg_table *sgt,
 	if (!(flags & MSM_BO_EXTBUF)) {
 		ret = dma_map_sg_attrs(client->dev, sgt->sgl, sgt->nents, dir,
 				attrs);
+#if IS_ENABLED(CONFIG_DISPLAY_SAMSUNG)
+		if (!in_interrupt()) {
+			if (!ret) {
+				for (retry_cnt = 0; retry_cnt < 62 ; retry_cnt++) {
+					/* To wait free page by memory reclaim*/
+					usleep_range(16000, 16000);
+
+					pr_err("dma map sg failed : retry (%d)\n", retry_cnt);
+					ret = dma_map_sg_attrs(client->dev, sgt->sgl, sgt->nents, dir,
+						attrs);
+					if (!ret)
+						break;
+				}
+			}
+		}
+#endif
 		if (!ret) {
 			DRM_ERROR("dma map sg failed\n");
 			return -ENOMEM;
@@ -281,6 +304,11 @@ static int msm_smmu_map_dma_buf(struct msm_mmu *mmu, struct sg_table *sgt,
 		SDE_EVT32(sgt->sgl->dma_address, sgt->sgl->dma_length,
 				dir, attrs, client->secure, flags);
 	}
+
+#if IS_ENABLED(CONFIG_DISPLAY_SAMSUNG) && IS_ENABLED(CONFIG_SEC_DEBUG)
+	if (sec_debug_is_enabled() && sgt && sgt->sgl)
+		ss_smmu_debug_map(SMMU_RT_DISPLAY_DEBUG, sgt);
+#endif
 
 	return 0;
 }
@@ -304,6 +332,11 @@ static void msm_smmu_unmap_dma_buf(struct msm_mmu *mmu, struct sg_table *sgt,
 		SDE_EVT32(sgt->sgl->dma_address, sgt->sgl->dma_length,
 				dir, client->secure, flags);
 	}
+
+#if IS_ENABLED(CONFIG_DISPLAY_SAMSUNG) && IS_ENABLED(CONFIG_SEC_DEBUG)
+	if (sec_debug_is_enabled() && sgt && sgt->sgl)
+		ss_smmu_debug_unmap(SMMU_RT_DISPLAY_DEBUG, sgt);
+#endif
 
 	if (!(flags & MSM_BO_EXTBUF))
 		dma_unmap_sg(client->dev, sgt->sgl, sgt->nents, dir);
@@ -465,6 +498,13 @@ static int msm_smmu_fault_handler(struct iommu_domain *domain,
 	DRM_ERROR("trigger dump, iova=0x%08lx, flags=0x%x\n", iova, flags);
 	DRM_ERROR("SMMU device:%s", client->dev ? client->dev->kobj.name : "");
 
+#if 0
+#if IS_ENABLED(CONFIG_DISPLAY_SAMSUNG)
+	ss_smmu_debug_log();
+	SDE_DBG_DUMP(SDE_DBG_BUILT_IN_ALL, "panic"); // case 03250922
+#endif
+#endif
+
 	/*
 	 * return -ENOSYS to allow smmu driver to dump out useful
 	 * debug info.
@@ -528,6 +568,9 @@ static int msm_smmu_probe(struct platform_device *pdev)
 		return -EINVAL;
 	}
 
+#if IS_ENABLED(CONFIG_DISPLAY_SAMSUNG)
+	pr_err("msm_smmu_probe ++ \n");
+#endif
 	DRM_INFO("probing device %s\n", match->compatible);
 
 	client = devm_kzalloc(&pdev->dev, sizeof(*client), GFP_KERNEL);
@@ -565,6 +608,10 @@ static int msm_smmu_probe(struct platform_device *pdev)
 	ret = component_add(&pdev->dev, &msm_smmu_comp_ops);
 	if (ret)
 		pr_err("component add failed\n");
+
+#if IS_ENABLED(CONFIG_DISPLAY_SAMSUNG)
+	pr_err("msm_smmu_probe -- \n");
+#endif
 
 	return ret;
 }

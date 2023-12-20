@@ -11,6 +11,10 @@
 #include "dsi_clk.h"
 #include "dsi_defs.h"
 
+#if IS_ENABLED(CONFIG_DISPLAY_SAMSUNG)
+#include "sde_dbg.h"
+#endif
+
 struct dsi_core_clks {
 	struct dsi_core_clk_info clks;
 };
@@ -202,12 +206,18 @@ int dsi_clk_update_parent(struct dsi_clk_link_set *parent,
 	rc = clk_set_parent(child->byte_clk, parent->byte_clk);
 	if (rc) {
 		DSI_ERR("failed to set byte clk parent\n");
+#if IS_ENABLED(CONFIG_DISPLAY_SAMSUNG)
+		SDE_DBG_DUMP(SDE_DBG_BUILT_IN_ALL, "panic");
+#endif
 		goto error;
 	}
 
 	rc = clk_set_parent(child->pixel_clk, parent->pixel_clk);
 	if (rc) {
 		DSI_ERR("failed to set pixel clk parent\n");
+#if IS_ENABLED(CONFIG_DISPLAY_SAMSUNG)
+		SDE_DBG_DUMP(SDE_DBG_BUILT_IN_ALL, "panic");
+#endif
 		goto error;
 	}
 error:
@@ -633,6 +643,10 @@ error:
 	return rc;
 }
 
+#if IS_ENABLED(CONFIG_DISPLAY_SAMSUNG)
+extern void tcon_prepare(void);
+#endif
+
 static int dsi_display_link_clk_enable(struct dsi_link_clks *clks,
 	enum dsi_lclk_type l_type, u32 ctrl_count, u32 master_ndx)
 {
@@ -660,6 +674,11 @@ static int dsi_display_link_clk_enable(struct dsi_link_clks *clks,
 		}
 	}
 
+#if IS_ENABLED(CONFIG_DISPLAY_SAMSUNG)
+	if ((l_type & DSI_LINK_LP_CLK) && (ctrl_count == 1))
+		tcon_prepare();
+#endif
+
 	if (l_type & DSI_LINK_HS_CLK) {
 		if (!mngr->is_cont_splash_enabled) {
 			mngr->phy_config_cb(mngr->priv_data, true);
@@ -686,6 +705,9 @@ static int dsi_display_link_clk_enable(struct dsi_link_clks *clks,
 						rc);
 				goto error_disable_master;
 			}
+#if IS_ENABLED(CONFIG_DISPLAY_SAMSUNG)
+			tcon_prepare();
+#endif
 		}
 
 		if (l_type & DSI_LINK_HS_CLK) {
@@ -748,6 +770,11 @@ error:
 	return rc;
 }
 
+#if IS_ENABLED(CONFIG_DISPLAY_SAMSUNG)
+extern void force_sustain_lp11_for_sleep(void);
+extern void check_aot_reset_early_off(void);
+#endif
+
 static int dsi_display_link_clk_disable(struct dsi_link_clks *clks,
 	enum dsi_lclk_type l_type, u32 ctrl_count, u32 master_ndx)
 {
@@ -774,6 +801,10 @@ static int dsi_display_link_clk_disable(struct dsi_link_clks *clks,
 			continue;
 
 		if (l_type & DSI_LINK_LP_CLK) {
+#if IS_ENABLED(CONFIG_DISPLAY_SAMSUNG)
+			force_sustain_lp11_for_sleep();
+			check_aot_reset_early_off();
+#endif
 			rc = dsi_link_lp_clk_stop(&clk->lp_clks);
 			if (rc)
 				DSI_ERR("failed to turn off lp link clocks, rc=%d\n",
@@ -1305,6 +1336,38 @@ int dsi_display_link_clk_force_update_ctrl(void *handle)
 
 	return rc;
 }
+
+#if IS_ENABLED(CONFIG_DISPLAY_SAMSUNG)
+#include <linux/clk-provider.h>
+
+int dsi_display_is_core_clk_on(void *handle)
+{
+	struct dsi_clk_client_info *c = handle;
+	struct dsi_clk_mngr *mngr;
+	struct dsi_core_clks *clks;
+	struct dsi_core_clks *m_clks;
+
+	if (!c)
+		return -ENODEV;
+
+	/* check only refcount managed by display driver */
+	if (c->core_refcount > 0 || c->core_clk_state != DSI_CLK_OFF)
+		return 1;
+
+	/* check clock further */
+	mngr = c->mngr;
+	if (!mngr)
+		return -ENODEV;
+
+	clks = mngr->core_clks;
+	m_clks = &clks[mngr->master_ndx];
+
+	if (__clk_is_enabled(m_clks->clks.mdp_core_clk))
+		return 1;
+
+	return 0;
+}
+#endif
 
 int dsi_display_clk_ctrl(void *handle,
 	u32 clk_type, u32 clk_state)

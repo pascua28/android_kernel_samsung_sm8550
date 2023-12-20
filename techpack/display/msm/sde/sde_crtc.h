@@ -646,7 +646,10 @@ static inline void sde_crtc_set_needs_hw_reset(struct drm_crtc *crtc)
  */
 int sde_crtc_reset_hw(struct drm_crtc *crtc, struct drm_crtc_state *old_state,
 	bool recovery_events);
-
+#if IS_ENABLED(CONFIG_DISPLAY_SAMSUNG)
+int sde_crtc_enable_vblank(struct drm_crtc *crtc);
+void sde_crtc_disable_vblank(struct drm_crtc *crtc);
+#endif
 /**
  * sde_crtc_dump_fences - dump info for input fences of each crtc plane
  * @crtc: Pointer to DRM crtc instance

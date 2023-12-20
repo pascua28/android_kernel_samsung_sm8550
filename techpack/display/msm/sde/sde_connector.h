@@ -1234,7 +1234,7 @@ static inline bool sde_connector_is_quadpipe_3d_merge_enabled(
 }
 
 static inline bool sde_connector_is_dualpipe_3d_merge_enabled(
-		struct drm_connector_state *conn_state)
+	struct drm_connector_state *conn_state)
 {
 	enum sde_rm_topology_name topology;
 

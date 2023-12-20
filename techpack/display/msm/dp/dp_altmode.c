@@ -41,6 +41,7 @@ enum dp_altmode_pin_assignment {
 	DPAM_HPD_F,
 };
 
+#if !defined(CONFIG_SECDP)
 static int dp_altmode_set_usb_dp_mode(struct dp_altmode_private *altmode)
 {
 	int rc = 0;
@@ -226,6 +227,7 @@ static void dp_altmode_register(void *priv)
 	else
 		DP_DEBUG("success\n");
 }
+#endif
 
 static int dp_altmode_simulate_connect(struct dp_hpd *dp_hpd, bool hpd)
 {
@@ -271,7 +273,9 @@ static int dp_altmode_simulate_attention(struct dp_hpd *dp_hpd, int vdo)
 
 struct dp_hpd *dp_altmode_get(struct device *dev, struct dp_hpd_cb *cb)
 {
+#if !defined(CONFIG_SECDP)
 	int rc = 0;
+#endif
 	struct dp_altmode_private *altmode;
 	struct dp_altmode *dp_altmode;
 
@@ -292,18 +296,22 @@ struct dp_hpd *dp_altmode_get(struct device *dev, struct dp_hpd_cb *cb)
 	dp_altmode->base.simulate_connect = dp_altmode_simulate_connect;
 	dp_altmode->base.simulate_attention = dp_altmode_simulate_attention;
 
+#if !defined(CONFIG_SECDP)
 	rc = altmode_register_notifier(dev, dp_altmode_register, altmode);
 	if (rc < 0) {
 		DP_ERR("altmode probe notifier registration failed: %d\n", rc);
 		goto error;
 	}
+#endif
 
 	DP_DEBUG("success\n");
 
 	return &dp_altmode->base;
+#if !defined(CONFIG_SECDP)
 error:
 	kfree(altmode);
 	return ERR_PTR(rc);
+#endif
 }
 
 void dp_altmode_put(struct dp_hpd *dp_hpd)
@@ -318,8 +326,10 @@ void dp_altmode_put(struct dp_hpd *dp_hpd)
 	altmode = container_of(dp_altmode, struct dp_altmode_private,
 			dp_altmode);
 
+#if !defined(CONFIG_SECDP)
 	altmode_deregister_client(altmode->amclient);
 	altmode_deregister_notifier(altmode->dev, altmode);
+#endif
 
 	kfree(altmode);
 }

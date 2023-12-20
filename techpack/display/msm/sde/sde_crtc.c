@@ -48,6 +48,10 @@
 #include "msm_drv.h"
 #include "sde_vm.h"
 
+#if IS_ENABLED(CONFIG_DISPLAY_SAMSUNG)
+#include "ss_dsi_panel_debug.h"
+#endif
+
 #define SDE_PSTATES_MAX (SDE_STAGE_MAX * 4)
 #define SDE_MULTIRECT_PLANE_MAX (SDE_STAGE_MAX * 2)
 
@@ -3016,6 +3020,9 @@ static void sde_crtc_vblank_cb(void *data, ktime_t ts)
 
 	drm_crtc_handle_vblank(crtc);
 	DRM_DEBUG_VBL("crtc%d, ts:%llu\n", crtc->base.id, ktime_to_us(ts));
+#if IS_ENABLED(CONFIG_DISPLAY_SAMSUNG)
+	SS_XLOG_VSYNC(DRMID(crtc), ktime_to_us(ts));
+#endif
 	SDE_EVT32_VERBOSE(DRMID(crtc), ktime_to_us(ts));
 }
 
@@ -3127,7 +3134,10 @@ static void sde_crtc_frame_event_work(struct kthread_work *work)
 					| SDE_ENCODER_FRAME_EVENT_PANEL_DEAD
 					| SDE_ENCODER_FRAME_EVENT_DONE))) {
 
+		SDE_ATRACE_BEGIN("crtc_frame_event_runtime");
+		SDE_EVT32(0xEEEEEEEE);
 		ret = pm_runtime_resume_and_get(crtc->dev->dev);
+		SDE_ATRACE_END("crtc_frame_event_runtime");
 		if (ret < 0) {
 			SDE_ERROR("failed to enable power resource %d\n", ret);
 			SDE_EVT32(ret, SDE_EVTLOG_ERROR);
@@ -3152,7 +3162,9 @@ static void sde_crtc_frame_event_work(struct kthread_work *work)
 					ktime_to_ns(fevent->ts));
 			SDE_EVT32(DRMID(crtc), fevent->event,
 							SDE_EVTLOG_FUNC_CASE2);
+			SDE_ATRACE_BEGIN("crtc_frame_event_bw");
 			sde_core_perf_crtc_release_bw(crtc);
+			SDE_ATRACE_END("crtc_frame_event_bw");
 		} else {
 			SDE_EVT32_VERBOSE(DRMID(crtc), fevent->event,
 							SDE_EVTLOG_FUNC_CASE3);
@@ -3238,6 +3250,13 @@ static void _sde_crtc_set_input_fence_timeout(struct sde_crtc_state *cstate)
 	cstate->input_fence_timeout_ns =
 		sde_crtc_get_property(cstate, CRTC_PROP_INPUT_FENCE_TIMEOUT);
 	cstate->input_fence_timeout_ns *= NSEC_PER_MSEC;
+
+#if IS_ENABLED(CONFIG_DISPLAY_SAMSUNG)
+	/* Increase fence timeout value to 20 sec (case 03381402 / P180412-02009) */
+	/* use 10s for avoiding DP timeout (P211102-01233)*/
+	// cstate->input_fence_timeout_ns *= 2;
+	SDE_DEBUG("input_fence_timeout_ns %llu\n", cstate->input_fence_timeout_ns);
+#endif
 }
 
 void _sde_crtc_clear_dim_layers_v1(struct drm_crtc_state *state)
@@ -4638,6 +4657,56 @@ int sde_crtc_reset_hw(struct drm_crtc *crtc, struct drm_crtc_state *old_state,
 	return !recovery_events ? 0 : -EAGAIN;
 }
 
+#if IS_ENABLED(CONFIG_DISPLAY_SAMSUNG)
+#include "dsi_drm.h"
+#include "dsi_panel.h"
+#include "ss_dsi_panel_common.h"
+
+/* To send video mode TDDI fps change mipi cmds by VFP changing  */
+void ss_dfps_control(struct drm_crtc *crtc)
+{
+	struct drm_device *dev = crtc->dev;
+	struct drm_encoder *encoder = NULL;
+	struct drm_bridge *r_bridge = NULL;
+	struct dsi_bridge *c_bridge = NULL;
+	struct dsi_display *display = NULL;
+	struct samsung_display_driver_data *vdd = NULL;
+	struct list_head *br_chain  = NULL;
+
+	list_for_each_entry(encoder, &dev->mode_config.encoder_list, head) {
+		if (encoder->crtc != crtc)
+			continue;
+
+		br_chain = &encoder->bridge_chain;
+		if (encoder->encoder_type == DRM_MODE_ENCODER_DSI && !list_empty(br_chain)) {
+			r_bridge = list_first_entry_or_null(br_chain, struct drm_bridge, chain_node);
+			if (r_bridge) { /* drm_bridge->dsi_bridge */
+				c_bridge = container_of(r_bridge, struct dsi_bridge, base);
+				if (c_bridge && c_bridge->dsi_mode.dsi_mode_flags & DSI_MODE_FLAG_VRR) {
+					display = c_bridge->display;
+					if (display && display->panel &&
+						display->panel->dfps_caps.type 	== DSI_DFPS_IMMEDIATE_VFP) {
+						vdd = (struct samsung_display_driver_data *)display->panel->panel_private;
+
+						SDE_ATRACE_BEGIN("ss_dfps_control");
+						if (vdd && vdd->panel_func.samsung_dfps_panel_update)
+							vdd->panel_func.samsung_dfps_panel_update(vdd,
+										c_bridge->dsi_mode.timing.refresh_rate);
+						SDE_ATRACE_END("ss_dfps_control");
+
+					}
+					SDE_DEBUG("crtc%d fps : %d\n", crtc->base.id, c_bridge->dsi_mode.timing.refresh_rate);
+				}
+			}
+		}
+
+		r_bridge = NULL;
+		c_bridge = NULL;
+		display = NULL;
+	}
+}
+#endif
+
 void sde_crtc_commit_kickoff(struct drm_crtc *crtc,
 		struct drm_crtc_state *old_state)
 {
@@ -4746,6 +4815,10 @@ void sde_crtc_commit_kickoff(struct drm_crtc *crtc,
 		sde_fence_update_hw_fences_txq(sde_crtc->output_fence, false, 0,
 			sde_kms->debugfs_hw_fence);
 
+#if IS_ENABLED(CONFIG_DISPLAY_SAMSUNG)
+	ss_dfps_control(crtc);
+#endif
+
 	list_for_each_entry(encoder, &dev->mode_config.encoder_list, head) {
 		if (encoder->crtc != crtc)
 			continue;
@@ -4781,6 +4854,9 @@ static int _sde_crtc_vblank_enable(
 
 	if (!sde_crtc) {
 		SDE_ERROR("invalid crtc\n");
+#if IS_ENABLED(CONFIG_DISPLAY_SAMSUNG)
+		SS_XLOG_VSYNC(0xbad1);
+#endif
 		return -EINVAL;
 	}
 
@@ -4796,6 +4872,9 @@ static int _sde_crtc_vblank_enable(
 		if (ret < 0) {
 			SDE_ERROR("failed to enable power resource %d\n", ret);
 			SDE_EVT32(ret, SDE_EVTLOG_ERROR);
+#if IS_ENABLED(CONFIG_DISPLAY_SAMSUNG)
+			SS_XLOG_VSYNC(0xbad2);
+#endif
 			return ret;
 		}
 
@@ -6238,6 +6317,9 @@ int sde_crtc_vblank(struct drm_crtc *crtc, bool en)
 
 	if (!crtc) {
 		SDE_ERROR("invalid crtc\n");
+#if IS_ENABLED(CONFIG_DISPLAY_SAMSUNG)
+		SS_XLOG_VSYNC(0xbad);
+#endif
 		return -EINVAL;
 	}
 	sde_crtc = to_sde_crtc(crtc);
@@ -7345,6 +7427,7 @@ static ssize_t _sde_crtc_misr_read(struct file *file,
 	if (!sde_kms)
 		return -EINVAL;
 
+	SDE_EVT32(0xEEEEEEEE);
 	rc = pm_runtime_resume_and_get(crtc->dev->dev);
 	if (rc < 0) {
 		SDE_ERROR("failed to enable power resource %d\n", rc);
@@ -7652,7 +7735,9 @@ static int vblank_ctrl_queue_work(struct msm_drm_private *priv,
 		return -ENOMEM;
 
 	crtc = priv->crtcs[crtc_id];
-
+#if IS_ENABLED(CONFIG_DISPLAY_SAMSUNG)
+	SS_XLOG_VSYNC(enable);
+#endif
 	kthread_init_work(&cur_work->work, vblank_ctrl_worker);
 	cur_work->crtc_id = crtc_id;
 	cur_work->enable = enable;
@@ -7663,7 +7748,11 @@ static int vblank_ctrl_queue_work(struct msm_drm_private *priv,
 	return 0;
 }
 
+#if IS_ENABLED(CONFIG_DISPLAY_SAMSUNG)
+int sde_crtc_enable_vblank(struct drm_crtc *crtc)
+#else
 static int sde_crtc_enable_vblank(struct drm_crtc *crtc)
+#endif
 {
 	struct drm_device *dev = crtc->dev;
 	unsigned int pipe = crtc->index;
@@ -7672,12 +7761,18 @@ static int sde_crtc_enable_vblank(struct drm_crtc *crtc)
 
 	if (!kms)
 		return -ENXIO;
-
+#if IS_ENABLED(CONFIG_DISPLAY_SAMSUNG)
+	SS_XLOG_VSYNC(0x1);
+#endif
 	DBG("dev=%pK, crtc=%u", dev, pipe);
 	return vblank_ctrl_queue_work(priv, pipe, true);
 }
 
+#if IS_ENABLED(CONFIG_DISPLAY_SAMSUNG)
+void sde_crtc_disable_vblank(struct drm_crtc *crtc)
+#else
 static void sde_crtc_disable_vblank(struct drm_crtc *crtc)
+#endif
 {
 	struct drm_device *dev = crtc->dev;
 	unsigned int pipe = crtc->index;
@@ -7687,7 +7782,9 @@ static void sde_crtc_disable_vblank(struct drm_crtc *crtc)
 	if (!kms)
 		return;
 	DBG("dev=%pK, crtc=%u", dev, pipe);
-
+#if IS_ENABLED(CONFIG_DISPLAY_SAMSUNG)
+	SS_XLOG_VSYNC(0x0);
+#endif
 	vblank_ctrl_queue_work(priv, pipe, false);
 }
 
@@ -8196,6 +8293,7 @@ static int _sde_crtc_event_enable(struct sde_kms *kms,
 
 	ret = 0;
 	if (crtc_drm->enabled) {
+		SDE_EVT32(0xEEEEEEEE);
 		ret = pm_runtime_resume_and_get(crtc_drm->dev->dev);
 		if (ret < 0) {
 			SDE_ERROR("failed to enable power resource %d\n", ret);
@@ -8265,6 +8363,8 @@ static int _sde_crtc_event_disable(struct sde_kms *kms,
 		kfree(node);
 		return 0;
 	}
+
+	SDE_EVT32(0xEEEEEEEE);
 	ret = pm_runtime_resume_and_get(crtc_drm->dev->dev);
 	if (ret < 0) {
 		SDE_ERROR("failed to enable power resource %d\n", ret);

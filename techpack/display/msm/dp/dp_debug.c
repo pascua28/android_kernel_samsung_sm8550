@@ -20,6 +20,9 @@
 #include "dp_hpd.h"
 #include "dp_mst_sim.h"
 #include "dp_mst_drm.h"
+#if defined(CONFIG_SECDP)
+#include "secdp.h"
+#endif
 
 #define DEBUG_NAME "drm_dp"
 
@@ -155,6 +158,16 @@ static ssize_t dp_debug_write_edid(struct file *file,
 
 	if (copy_from_user(buf, user_buff, size))
 		goto bail;
+
+#if defined(CONFIG_SECDP)
+	if (!strncmp(buf, "reset", 5)) {
+		DP_DEBUG("disable SIM_MODE_EDID\n");
+		dp_debug_disable_sim_mode(debug, DP_SIM_MODE_EDID);
+		kfree(buf);
+		mutex_unlock(&debug->lock);
+		return rc;
+	}
+#endif
 
 	edid_size = size / char_to_nib;
 	buf_t = buf;

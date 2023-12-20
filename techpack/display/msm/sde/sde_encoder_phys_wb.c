@@ -667,7 +667,7 @@ static void _sde_encoder_phys_wb_setup_ctl(struct sde_encoder_phys *phys_enc,
 		intf_cfg_v1->intf_count = SDE_NONE;
 		intf_cfg_v1->wb_count = num_wb;
 		intf_cfg_v1->wb[0] = hw_wb->idx;
-		if (SDE_FORMAT_IS_YUV(format)) {
+		if (SDE_FORMAT_IS_YUV(format) && hw_cdm) {
 			intf_cfg_v1->cdm_count = num_wb;
 			intf_cfg_v1->cdm[0] = hw_cdm->idx;
 		}

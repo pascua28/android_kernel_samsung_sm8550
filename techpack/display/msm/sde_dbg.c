@@ -23,6 +23,10 @@
 #include "sde/sde_kms.h"
 #include "sde/sde_hw_util.h"
 
+#if IS_ENABLED(CONFIG_DISPLAY_SAMSUNG)
+#include "ss_dsi_panel_common.h"
+#endif
+
 #define SDE_DBG_BASE_MAX		10
 
 #define DEFAULT_PANIC		1
@@ -1236,8 +1240,11 @@ void sde_evtlog_dump_all(struct sde_dbg_evtlog *evtlog)
 			if (!sde_evtlog_dump_to_buffer(evtlog, buf, SDE_EVTLOG_BUF_MAX,
 					update_last_entry, false))
 				break;
-
+#if IS_ENABLED(CONFIG_DISPLAY_SAMSUNG)
+			pr_info("%s", buf);
+#else
 			pr_info("%s\n", buf);
+#endif
 			update_last_entry = false;
 		}
 	}
@@ -1335,6 +1342,11 @@ static void _sde_dump_array(bool do_panic, const char *name, bool dump_secure, u
 
 	if (!skip_power)
 		pm_runtime_put_sync(dbg_base->dev);
+
+#if IS_ENABLED(CONFIG_DISPLAY_SAMSUNG)
+	if (do_panic && sde_dbg_base.panic_on_err)
+		ss_store_xlog_panic_dbg();
+#endif
 
 	if (do_panic && dbg_base->panic_on_err && (!in_dump))
 		panic(name);
@@ -1467,6 +1479,14 @@ void sde_dbg_dump(enum sde_dbg_dump_context dump_mode, const char *name, u64 dum
 		return;
 	}
 
+#if IS_ENABLED(CONFIG_DISPLAY_SAMSUNG) && IS_ENABLED(CONFIG_SEC_DEBUG)
+        if (!sec_debug_is_enabled())
+		return;
+#else
+	return;
+#endif
+
+
 	sde_dbg_base.dump_mode = dump_mode;
 
 	va_start(args, dump_blk_mask);
@@ -1543,6 +1563,46 @@ void sde_dbg_ctrl(const char *name, ...)
 
 	va_end(args);
 }
+
+#if IS_ENABLED(CONFIG_DISPLAY_SAMSUNG)
+void ss_sde_dbg_debugfs_open(void)
+{
+	mutex_lock(&sde_dbg_base.mutex);
+	sde_dbg_base.cur_evt_index = 0;
+	sde_dbg_base.evtlog->first = (u32)atomic_add_return(0, &sde_dbg_base.evtlog->curr) + 1;
+	sde_dbg_base.evtlog->last =
+		sde_dbg_base.evtlog->first + SDE_EVTLOG_ENTRY;
+	mutex_unlock(&sde_dbg_base.mutex);
+}
+
+ssize_t ss_sde_evtlog_dump_read(struct file *file, char __user *buff,
+		size_t count, loff_t *ppos)
+{
+	ssize_t len = 0;
+	char evtlog_buf[SDE_EVTLOG_BUF_MAX];
+
+	if (!buff || !ppos)
+		return -EINVAL;
+
+	mutex_lock(&sde_dbg_base.mutex);
+	len = sde_evtlog_dump_to_buffer(sde_dbg_base.evtlog,
+			evtlog_buf, SDE_EVTLOG_BUF_MAX,
+			!sde_dbg_base.cur_evt_index, true);
+	sde_dbg_base.cur_evt_index++;
+	mutex_unlock(&sde_dbg_base.mutex);
+
+	if (len < 0 || len > count) {
+		pr_err("len is more than user buffer size\n");
+		return 0;
+	}
+
+	if (copy_to_user(buff, evtlog_buf, len))
+		return -EFAULT;
+	*ppos += len;
+
+	return len;
+}
+#endif
 
 #if IS_ENABLED(CONFIG_DEBUG_FS)
 /*
@@ -2518,7 +2578,11 @@ int sde_dbg_debugfs_register(struct device *dev)
 	priv->debug_root = debugfs_root;
 
 	debugfs_create_file("dbg_ctrl", 0600, debugfs_root, NULL, &sde_dbg_ctrl_fops);
+#if IS_ENABLED(CONFIG_DISPLAY_SAMSUNG)
+	debugfs_create_file("dump", 0644, debugfs_root, NULL, &sde_evtlog_fops);
+#else
 	debugfs_create_file("dump", 0600, debugfs_root, NULL, &sde_evtlog_fops);
+#endif
 	debugfs_create_file("recovery_reg", 0400, debugfs_root, NULL, &sde_recovery_reg_fops);
 
 	debugfs_create_u32("enable", 0600, debugfs_root, &(sde_dbg_base.evtlog->enable));
@@ -2661,7 +2725,14 @@ int sde_dbg_init(struct device *dev)
 	INIT_WORK(&sde_dbg_base.dump_work, _sde_dump_work);
 	sde_dbg_base.work_panic = false;
 	sde_dbg_base.coredump_reading = false;
+#if IS_ENABLED(CONFIG_DISPLAY_SAMSUNG) && IS_ENABLED(CONFIG_SEC_DEBUG)
+	if (sec_debug_is_enabled())
+		sde_dbg_base.panic_on_err = DEFAULT_PANIC;
+	else
+		sde_dbg_base.panic_on_err = 0;
+#else
 	sde_dbg_base.panic_on_err = DEFAULT_PANIC;
+#endif
 	sde_dbg_base.dump_option = SDE_DBG_DEFAULT_DUMP_MODE;
 	sde_dbg_base.dump_blk_mask = SDE_DBG_BUILT_IN_ALL;
 	memset(&sde_dbg_base.regbuf, 0, sizeof(sde_dbg_base.regbuf));

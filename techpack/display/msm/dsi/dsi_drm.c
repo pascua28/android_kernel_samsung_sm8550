@@ -16,6 +16,10 @@
 #include "msm_drv.h"
 #include "sde_encoder.h"
 
+#if IS_ENABLED(CONFIG_DISPLAY_SAMSUNG)
+#include "ss_dsi_panel_common.h"
+#endif
+
 #define to_dsi_bridge(x)     container_of((x), struct dsi_bridge, base)
 #define to_dsi_state(x)      container_of((x), struct dsi_connector_state, base)
 
@@ -58,6 +62,11 @@ static void convert_to_dsi_mode(const struct drm_display_mode *drm_mode,
 			!!(drm_mode->flags & DRM_MODE_FLAG_PHSYNC);
 	dsi_mode->timing.v_sync_polarity =
 			!!(drm_mode->flags & DRM_MODE_FLAG_PVSYNC);
+
+#if IS_ENABLED(CONFIG_DISPLAY_SAMSUNG)
+	dsi_mode->timing.sot_hs_mode = ss_is_sot_hs_from_drm_mode(drm_mode);
+	dsi_mode->timing.phs_mode = ss_is_phs_from_drm_mode(drm_mode);
+#endif
 }
 
 static void msm_parse_mode_priv_info(const struct msm_display_mode *msm_mode,
@@ -131,10 +140,17 @@ void dsi_convert_to_drm_mode(const struct dsi_display_mode *dsi_mode,
 	if (dsi_mode->timing.v_sync_polarity)
 		drm_mode->flags |= DRM_MODE_FLAG_PVSYNC;
 
+#if IS_ENABLED(CONFIG_DISPLAY_SAMSUNG)
+	snprintf(drm_mode->name, DRM_DISPLAY_MODE_LEN, "%dx%dx%dx%s%s",
+			drm_mode->hdisplay, drm_mode->vdisplay,
+			drm_mode_vrefresh(drm_mode), panel_caps,
+			dsi_mode->timing.sot_hs_mode ? (dsi_mode->timing.phs_mode ? "PHS" : "HS") : "NS");
+#else
 	/* set mode name */
 	snprintf(drm_mode->name, DRM_DISPLAY_MODE_LEN, "%dx%dx%d%s",
 			drm_mode->hdisplay, drm_mode->vdisplay,
 			drm_mode_vrefresh(drm_mode), panel_caps);
+#endif
 }
 
 static void dsi_convert_to_msm_mode(const struct dsi_display_mode *dsi_mode,
@@ -439,8 +455,21 @@ static bool _dsi_bridge_mode_validate_and_fixup(struct drm_bridge *bridge,
 		(!(adj_mode->dsi_mode_flags & DSI_MODE_FLAG_POMS_TO_CMD)) &&
 		(!crtc_state->active_changed ||
 		 display->is_cont_splash_enabled)) {
-		adj_mode->dsi_mode_flags |= DSI_MODE_FLAG_DMS;
+#if IS_ENABLED(CONFIG_DISPLAY_SAMSUNG)
+		rc = ss_vrr_apply_dsi_bridge_mode_fixup(display, cur_mode,
+					cur_dsi_mode, adj_mode);
 
+		SDE_EVT32(SDE_EVTLOG_FUNC_CASE2, 
+				cur_dsi_mode.timing.refresh_rate, cur_dsi_mode.timing.sot_hs_mode, cur_dsi_mode.timing.phs_mode,
+				adj_mode->timing.refresh_rate, adj_mode->timing.sot_hs_mode, adj_mode->timing.phs_mode);
+
+	} else if (!dsi_display_mode_match(&cur_dsi_mode, adj_mode,
+				DSI_MODE_MATCH_FULL_TIMINGS)) {
+		rc = ss_vrr_save_dsi_bridge_mode_fixup(display, cur_mode,
+					cur_dsi_mode, adj_mode, crtc_state);
+#else
+		adj_mode->dsi_mode_flags |= DSI_MODE_FLAG_DMS;
+#endif
 		SDE_EVT32(SDE_EVTLOG_FUNC_CASE2,
 			adj_mode->timing.h_active,
 			adj_mode->timing.v_active,
@@ -656,6 +685,10 @@ int dsi_conn_get_mode_info(struct drm_connector *connector,
 		dsi_display->panel->host_config.line_insertion_enable = 0;
 	}
 
+#if IS_ENABLED(CONFIG_DISPLAY_SAMSUNG)
+	mode_info->frame_rate_org = mode_info->frame_rate;
+#endif
+
 	memcpy(&mode_info->topology, &dsi_mode->priv_info->topology,
 			sizeof(struct msm_display_topology));
 
@@ -754,6 +787,9 @@ int dsi_conn_get_qsync_min_fps(struct drm_connector_state *conn_state)
 		return -EINVAL;
 
 	priv_info = (struct dsi_display_mode_priv_info *)(msm_mode->private);
+#if IS_ENABLED(CONFIG_DISPLAY_SAMSUNG)
+	DSI_DEBUG("qsync_min_fps(%d)\n", priv_info->qsync_min_fps);
+#endif
 	return priv_info->qsync_min_fps;
 }
 
@@ -1164,6 +1200,32 @@ int dsi_connector_get_modes(struct drm_connector *connector, void *data,
 
 	for (i = 0; i < count; i++) {
 		struct drm_display_mode *m;
+
+#if IS_ENABLED(CONFIG_DISPLAY_SAMSUNG)
+		struct samsung_display_driver_data *vdd = NULL;
+		
+		if (display && display->panel)
+			vdd = display->panel->panel_private;
+
+		if (vdd) {
+			u32 fps = modes[i].timing.refresh_rate;
+			bool hs = modes[i].timing.sot_hs_mode;
+			bool phs = modes[i].timing.phs_mode;
+			int i;
+
+			for (i = 0; i < vdd->disable_vrr_modes_count; i++) {
+				if (vdd->disable_vrr_modes[i].fps == fps &&
+						vdd->disable_vrr_modes[i].hs == hs &&
+						vdd->disable_vrr_modes[i].phs == phs) {
+					DSI_INFO("disable vrr modes: %d%s\n",
+						fps, phs ? "PHS" : hs ? "HS" : "NS");
+					break;
+				}
+			}
+			if (i != vdd->disable_vrr_modes_count)
+				continue;
+		}
+#endif
 
 		memset(&drm_mode, 0x0, sizeof(drm_mode));
 		dsi_convert_to_drm_mode(&modes[i], &drm_mode);

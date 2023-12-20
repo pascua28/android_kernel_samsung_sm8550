@@ -21,6 +21,7 @@
 		ipc_log_string(ipc_logging_context, fmt, ##__VA_ARGS__); \
 	} while (0)
 
+#if !defined(CONFIG_SECDP)
 #define DP_DEBUG(fmt, ...)                                                   \
 	do {                                                                 \
 		DP_IPC_LOG("[d][%-4d]"fmt, current->pid, ##__VA_ARGS__); \
@@ -72,6 +73,25 @@
 #define DP_ERR_V(fmt, ...)                                    \
 		pr_err("[drm:%s][msm-dp-err][%-4d]"fmt, __func__,   \
 				current->pid, ##__VA_ARGS__)
+#else
+#define DP_WARN(fmt, ...)  pr_warn(fmt, ##__VA_ARGS__)
+#define DP_ERR(fmt, ...)   pr_err(fmt, ##__VA_ARGS__)
+#define DP_INFO(fmt, ...)  pr_info(fmt, ##__VA_ARGS__)
+#define DP_DEBUG(fmt, ...) pr_debug(fmt, ##__VA_ARGS__)
+#define DP_WARN_V(fmt, ...)  pr_warn(fmt, ##__VA_ARGS__)
+#define DP_ERR_V(fmt, ...)   pr_err(fmt, ##__VA_ARGS__)
+#define DP_INFO_V(fmt, ...)  pr_info(fmt, ##__VA_ARGS__)
+#define DP_DEBUG_V(fmt, ...) pr_debug(fmt, ##__VA_ARGS__)
+#endif
+
+/*#define SECDP_FUNC_TRACE*/
+#ifdef SECDP_FUNC_TRACE
+#define DP_ENTER(fmt, ...) pr_debug("+++ " pr_fmt(fmt), ##__VA_ARGS__)
+#define DP_LEAVE(fmt, ...) pr_debug("--- " pr_fmt(fmt), ##__VA_ARGS__) 
+#else
+#define DP_ENTER(fmt, ...) do {} while(0)
+#define DP_LEAVE(fmt, ...) do {} while(0)
+#endif
 
 #define DEFAULT_DISCONNECT_DELAY_MS 0
 #define MAX_DISCONNECT_DELAY_MS 10000

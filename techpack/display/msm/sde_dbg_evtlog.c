@@ -56,6 +56,47 @@ bool sde_evtlog_is_enabled(struct sde_dbg_evtlog *evtlog, u32 flag)
 	return evtlog && (evtlog->enable & flag);
 }
 
+void sde_evtlog_log_pick(struct sde_dbg_evtlog *evtlog, const char *name, int line,
+		int flag, ...)
+{
+	int i, val = 0;
+	va_list args;
+	struct sde_dbg_evtlog_log *log;
+	u32 index;
+
+	return;
+
+	if (!evtlog || !sde_evtlog_is_enabled(evtlog, flag) ||
+			_sde_evtlog_is_filtered_no_lock(evtlog, name))
+		return;
+
+	index = abs(atomic_inc_return(&evtlog->curr) % SDE_EVTLOG_ENTRY);
+
+	log = &evtlog->logs[index];
+	log->time = local_clock();
+	log->name = name;
+	log->line = line;
+	log->data_cnt = 0;
+	log->pid = current->pid;
+	log->cpu = raw_smp_processor_id();
+
+	va_start(args, flag);
+	for (i = 0; i < SDE_EVTLOG_MAX_DATA; i++) {
+
+		val = va_arg(args, int);
+		if (val == SDE_EVTLOG_DATA_LIMITER)
+			break;
+
+		log->data[i] = val;
+	}
+	va_end(args);
+	log->data_cnt = i;
+	evtlog->last++;
+
+	trace_sde_evtlog(name, line, log->data_cnt, log->data);
+}
+
+
 void sde_evtlog_log(struct sde_dbg_evtlog *evtlog, const char *name, int line,
 		int flag, ...)
 {
@@ -118,7 +159,11 @@ void sde_reglog_log(u8 blk_id, u32 val, u32 addr)
 static bool _sde_evtlog_dump_calc_range(struct sde_dbg_evtlog *evtlog,
 		bool update_last_entry, bool full_dump)
 {
+#if IS_ENABLED(CONFIG_DISPLAY_SAMSUNG)
+	int max_entries = full_dump ? SDE_EVTLOG_ENTRY : (SDE_EVTLOG_PRINT_ENTRY * 2);
+#else
 	int max_entries = full_dump ? SDE_EVTLOG_ENTRY : SDE_EVTLOG_PRINT_ENTRY;
+#endif
 
 	if (!evtlog)
 		return false;
@@ -170,7 +215,7 @@ ssize_t sde_evtlog_dump_to_buffer(struct sde_dbg_evtlog *evtlog,
 
 	prev_log = &evtlog->logs[(evtlog->first - 1) % SDE_EVTLOG_ENTRY];
 
-	off = snprintf((evtlog_buf + off), (evtlog_buf_size - off), "%s:%-4d",
+	off = snprintf((evtlog_buf + off), (evtlog_buf_size - off), "%50s:%-4d",
 		log->name, log->line);
 
 	if (off < SDE_EVTLOG_BUF_ALIGN) {

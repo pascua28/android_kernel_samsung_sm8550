@@ -1437,6 +1437,42 @@ void dsi_phy_set_continuous_clk(struct msm_dsi_phy *phy, bool enable)
 
 }
 
+#if IS_ENABLED(CONFIG_DISPLAY_SAMSUNG)
+void dsi_phy_store_str(struct msm_dsi_phy *phy, u32 *val)
+{
+	if (phy->hw.ops.store_str)
+		phy->hw.ops.store_str(&phy->hw, val);
+}
+u32 dsi_phy_show_str(struct msm_dsi_phy *phy)
+{
+	u32 ret = 0;
+
+	if (phy->hw.ops.show_str)
+		ret = phy->hw.ops.show_str(&phy->hw);
+
+	return ret;
+}
+void dsi_phy_store_vreg(struct msm_dsi_phy *phy, u32 *val)
+{
+	if (phy->hw.ops.store_vreg)
+		phy->hw.ops.store_vreg(&phy->hw, val);
+}
+u32 dsi_phy_show_vreg(struct msm_dsi_phy *phy)
+{
+	u32 ret = 0;
+
+	if (phy->hw.ops.show_vreg)
+		ret = phy->hw.ops.show_vreg(&phy->hw);
+
+	return ret;
+}
+void dsi_phy_store_emphasis(struct msm_dsi_phy *phy, u32 *val)
+{
+	if (phy->hw.ops.store_emphasis)
+		phy->hw.ops.store_emphasis(&phy->hw, val);
+}
+#endif
+
 /**
  * dsi_phy_pll_parse_dfps_data() - parse dfps data for PLL
  * @phy:	DSI PHY handle

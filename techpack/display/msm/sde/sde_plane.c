@@ -40,6 +40,12 @@
 #include "sde_plane.h"
 #include "sde_color_processing.h"
 
+#if IS_ENABLED(CONFIG_DISPLAY_SAMSUNG)
+#include "sde_encoder.h"
+#include "../samsung/ss_dsi_panel_common.h"
+//#include "../../../../drivers/gpu/msm/kgsl_device.h"
+#endif
+
 #define SDE_DEBUG_PLANE(pl, fmt, ...) SDE_DEBUG("plane%d " fmt,\
 		(pl) ? (pl)->base.base.id : -1, ##__VA_ARGS__)
 
@@ -664,6 +670,30 @@ int sde_plane_wait_input_fence(struct drm_plane *plane, uint32_t wait_ms)
 						wait_ms, prefix, sde_plane_get_property(pstate,
 						PLANE_PROP_INPUT_FENCE));
 				sde_kms_timeline_status(plane->dev);
+#if IS_ENABLED(CONFIG_DISPLAY_SAMSUNG) && IS_ENABLED(CONFIG_SEC_DEBUG)
+				{
+					struct dma_fence *tout_fence = input_fence;
+
+					pr_info("DPCI Logging for fence timeout\n");
+					ss_inc_ftout_debug(tout_fence->ops->get_timeline_name(tout_fence));
+				}
+#if 0
+				/* msm-sde: DEBUG force panic when fence timeout (Case 04926910)
+				 * to debug ANR w/ fence timeout
+				 */
+				{
+					struct kgsl_device *device = kgsl_get_device(0);
+
+					mutex_lock(&device->mutex);
+					if (kgsl_state_is_awake(device)) {
+						device->force_panic = 1;
+						kgsl_device_snapshot(device, NULL, false);
+					} else
+						pr_err("KGSL device is not awake\n");
+					mutex_unlock(&device->mutex);
+				}
+#endif
+#endif
 				ret = -ETIMEDOUT;
 				break;
 			case -ERESTARTSYS:
@@ -2069,9 +2099,8 @@ static int _sde_plane_validate_fb(struct sde_plane *psde,
 	struct sde_plane_state *pstate;
 	struct sde_kms *sde_kms;
 	struct drm_framebuffer *fb;
-	int fb_ns = 0, fb_sec = 0, fb_sec_dir = 0;
-	int mode, num_planes;
-	int i, ret;
+	uint32_t fb_ns = 0, fb_sec = 0, fb_sec_dir = 0;
+	int mode, ret = 0, n, i;
 
 	pstate = to_sde_plane_state(state);
 	mode = sde_plane_get_property(pstate,
@@ -2082,7 +2111,7 @@ static int _sde_plane_validate_fb(struct sde_plane *psde,
 		SDE_ERROR("invalid drm_framebuffer\n");
 		return -EINVAL;
 	}
-	num_planes = fb->format->num_planes;
+	n = fb->format->num_planes;
 
 	sde_kms = _sde_plane_get_kms(&psde->base);
 	if (!sde_kms) {
@@ -2090,21 +2119,23 @@ static int _sde_plane_validate_fb(struct sde_plane *psde,
 		return -EINVAL;
 	}
 
-	if (sde_in_trusted_vm(sde_kms))
+	ret = sde_in_trusted_vm(sde_kms);
+	if (ret)
 		return 0;
 
-	for (i = 0; i < num_planes; i++) {
+	for (i = 0; i < n; i++) {
 		ret = msm_fb_obj_get_attrs(fb->obj[i], &fb_ns, &fb_sec,
 				&fb_sec_dir);
+
 		if (ret != 0 || ((fb_ns && (mode != SDE_DRM_FB_NON_SEC)) ||
 			(fb_sec && (mode != SDE_DRM_FB_SEC)) ||
 			(fb_sec_dir && (mode != SDE_DRM_FB_SEC_DIR_TRANS)))) {
-			SDE_ERROR_PLANE(psde,
-				"mode:%d fb:%d dma_buf rc:%d\n", mode,
-				fb->base.id, ret);
-			SDE_EVT32(psde->base.base.id, fb->base.id,
-				fb_ns, fb_sec, fb_sec_dir, ret,
-				SDE_EVTLOG_ERROR);
+				SDE_ERROR_PLANE(psde,
+					"mode:%d fb:%d dma_buf rc:%d\n", mode,
+					fb->base.id, ret);
+				SDE_EVT32(psde->base.base.id, fb->base.id,
+					fb_ns, fb_sec, fb_sec_dir, ret,
+					SDE_EVTLOG_ERROR);
 			return ret;
 		}
 	}

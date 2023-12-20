@@ -15,6 +15,9 @@
 #include <linux/of_gpio.h>
 #include "dp_gpio_hpd.h"
 #include "dp_debug.h"
+#if defined(CONFIG_SECDP)
+#include "secdp.h"
+#endif
 
 struct dp_gpio_hpd_private {
 	struct device *dev;
@@ -35,6 +38,8 @@ static int dp_gpio_hpd_connect(struct dp_gpio_hpd_private *gpio_hpd, bool hpd)
 		rc = -EINVAL;
 		goto error;
 	}
+
+	DP_ENTER("\n");
 
 	gpio_hpd->base.hpd_high = hpd;
 	gpio_hpd->base.alt_mode_cfg_done = hpd;
@@ -66,6 +71,8 @@ static int dp_gpio_hpd_attention(struct dp_gpio_hpd_private *gpio_hpd)
 		rc = -EINVAL;
 		goto error;
 	}
+
+	DP_ENTER("\n");
 
 	gpio_hpd->base.hpd_irq = true;
 
@@ -123,6 +130,8 @@ static void dp_gpio_hpd_work(struct work_struct *work)
 		struct dp_gpio_hpd_private, work);
 	int ret;
 
+	DP_ENTER("\n");
+
 	if (gpio_hpd->hpd) {
 		devm_free_irq(gpio_hpd->dev,
 			gpio_hpd->irq, gpio_hpd);
@@ -158,6 +167,8 @@ static int dp_gpio_hpd_simulate_connect(struct dp_hpd *dp_hpd, bool hpd)
 		goto error;
 	}
 
+	DP_ENTER("\n");
+
 	gpio_hpd = container_of(dp_hpd, struct dp_gpio_hpd_private, base);
 
 	dp_gpio_hpd_connect(gpio_hpd, hpd);
@@ -175,6 +186,8 @@ static int dp_gpio_hpd_simulate_attention(struct dp_hpd *dp_hpd, int vdo)
 		rc = -EINVAL;
 		goto error;
 	}
+
+	DP_ENTER("\n");
 
 	gpio_hpd = container_of(dp_hpd, struct dp_gpio_hpd_private, base);
 
@@ -234,6 +247,8 @@ struct dp_hpd *dp_gpio_hpd_get(struct device *dev,
 		goto error;
 	}
 
+	DP_ENTER("\n");
+
 	gpio_hpd = devm_kzalloc(dev, sizeof(*gpio_hpd), GFP_KERNEL);
 	if (!gpio_hpd) {
 		rc = -ENOMEM;
@@ -255,6 +270,7 @@ struct dp_hpd *dp_gpio_hpd_get(struct device *dev,
 	}
 
 	gpio_hpd->gpio_cfg.gpio = gpio;
+
 	strlcpy(gpio_hpd->gpio_cfg.gpio_name, hpd_gpio_name,
 		sizeof(gpio_hpd->gpio_cfg.gpio_name));
 	gpio_hpd->gpio_cfg.value = 0;
@@ -290,6 +306,8 @@ void dp_gpio_hpd_put(struct dp_hpd *dp_hpd)
 
 	if (!dp_hpd)
 		return;
+
+	DP_ENTER("\n");
 
 	gpio_hpd = container_of(dp_hpd, struct dp_gpio_hpd_private, base);
 

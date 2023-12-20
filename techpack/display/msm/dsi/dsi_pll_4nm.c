@@ -206,6 +206,10 @@ static void dsi_pll_config_slave(struct dsi_pll_resource *rsc)
 			rsc->slave ? "configured" : "absent");
 }
 
+#if IS_ENABLED(CONFIG_DISPLAY_SAMSUNG)
+extern int vdd_pll_ssc_disabled;
+#endif
+
 static void dsi_pll_setup_config(struct dsi_pll_4nm *pll, struct dsi_pll_resource *rsc)
 {
 	struct dsi_pll_config *config = &pll->pll_configuration;
@@ -233,6 +237,13 @@ static void dsi_pll_setup_config(struct dsi_pll_4nm *pll, struct dsi_pll_resourc
 		if (rsc->ssc_ppm)
 			config->ssc_offset = rsc->ssc_ppm;
 	}
+
+#if IS_ENABLED(CONFIG_DISPLAY_SAMSUNG)
+	if (vdd_pll_ssc_disabled) {
+		pr_err_once("[5nm] disable pll ssc %d\n", vdd_pll_ssc_disabled);
+		config->enable_ssc = false;
+	}
+#endif
 }
 
 static void dsi_pll_calc_dec_frac(struct dsi_pll_4nm *pll, struct dsi_pll_resource *rsc)

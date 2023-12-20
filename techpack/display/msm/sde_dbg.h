@@ -85,7 +85,11 @@ enum sde_dbg_dump_context {
  * "adb shell echo 2 > /sys/kernel/debug/dri/0/debug/reg_dump" before
  * doing the test cases.
  */
+#if IS_ENABLED(CONFIG_DISPLAY_SAMSUNG)
+#define SDE_DBG_DEFAULT_DUMP_MODE	SDE_DBG_DUMP_IN_LOG_LIMITED
+#else
 #define SDE_DBG_DEFAULT_DUMP_MODE	SDE_DBG_DUMP_IN_MEM
+#endif
 
 /*
  * Define blocks for register write logging.
@@ -122,7 +126,7 @@ enum sde_dbg_dump_context {
  * sysfs node or panic. This prevents kernel log from evtlog message
  * flood.
  */
-#define SDE_EVTLOG_PRINT_ENTRY	256
+#define SDE_EVTLOG_PRINT_ENTRY	512
 
 /*
  * evtlog keeps this number of entries in memory for debug purpose. This
@@ -250,6 +254,18 @@ extern struct sde_dbg_reglog *sde_dbg_base_reglog;
 		__LINE__, SDE_EVTLOG_EXTERNAL, ##__VA_ARGS__, \
 		SDE_EVTLOG_DATA_LIMITER)
 
+#define SDE_EVT32_PICK(...) sde_evtlog_log_pick(sde_dbg_base_evtlog, __func__, \
+		__LINE__, SDE_EVTLOG_ALWAYS, ##__VA_ARGS__, \
+		SDE_EVTLOG_DATA_LIMITER)
+
+#define SDE_EVT32_PICK_VERBOSE(...) sde_evtlog_log_pick(sde_dbg_base_evtlog, __func__, \
+		__LINE__, SDE_EVTLOG_VERBOSE, ##__VA_ARGS__, \
+		SDE_EVTLOG_DATA_LIMITER)
+
+#define SDE_EVT32_PICK_IRQ(...) sde_evtlog_log_pick(sde_dbg_base_evtlog, __func__, \
+		__LINE__, SDE_EVTLOG_IRQ, ##__VA_ARGS__, \
+		SDE_EVTLOG_DATA_LIMITER)
+
 /**
  * SDE_DBG_DUMP - trigger dumping of all sde_dbg facilities
  * @dump_blk_mask: mask of all the hw blk-ids that has to be dumped
@@ -327,6 +343,9 @@ void sde_evtlog_destroy(struct sde_dbg_evtlog *evtlog);
  * Returns:	none
  */
 void sde_reglog_destroy(struct sde_dbg_reglog *reglog);
+
+void sde_evtlog_log_pick(struct sde_dbg_evtlog *evtlog, const char *name, int line,
+		int flag, ...);
 
 /**
  * sde_evtlog_log - log an entry into the event log.
@@ -528,6 +547,12 @@ void sde_evtlog_set_filter(struct sde_dbg_evtlog *evtlog, char *filter);
  */
 int sde_evtlog_get_filter(struct sde_dbg_evtlog *evtlog, int index,
 		char *buf, size_t bufsz);
+
+#if IS_ENABLED(CONFIG_DISPLAY_SAMSUNG)
+void ss_sde_dbg_debugfs_open(void);
+ssize_t ss_sde_evtlog_dump_read(struct file *file, char __user *buff,
+		size_t count, loff_t *ppos);
+#endif
 
 #ifndef CONFIG_DRM_SDE_RSC
 static inline void sde_rsc_debug_dump(u32 mux_sel)

@@ -20,6 +20,13 @@
 #ifndef __MSM_DRV_H__
 #define __MSM_DRV_H__
 
+#if IS_ENABLED(CONFIG_DISPLAY_SAMSUNG) && IS_ENABLED(CONFIG_UML)
+#include "samsung/kunit_test/ss_kunit_test_garbage_macro.h"
+#endif
+#if IS_ENABLED(CONFIG_DRM_MSM_DP_KUNIT) && IS_ENABLED(CONFIG_UML)
+#include "dp/kunit_test/dp_kunit_macro.h"
+#endif
+
 #include <linux/kernel.h>
 #include <linux/clk.h>
 #include <linux/cpufreq.h>
@@ -238,6 +245,10 @@ enum msm_mdp_conn_property {
 	CONNECTOR_PROP_CACHE_STATE,
 	CONNECTOR_PROP_DSC_MODE,
 	CONNECTOR_PROP_WB_USAGE_TYPE,
+#if IS_ENABLED(CONFIG_DISPLAY_SAMSUNG)
+	/* SAMSUNG_FINGERPRINT */
+	CONNECTOR_PROP_FINGERPRINT_MASK,
+#endif
 
 	/* total # of properties */
 	CONNECTOR_PROP_COUNT
@@ -804,6 +815,9 @@ struct msm_display_wd_jitter_config {
  */
 struct msm_mode_info {
 	uint32_t frame_rate;
+#if IS_ENABLED(CONFIG_DISPLAY_SAMSUNG)
+	uint32_t frame_rate_org;
+#endif
 	uint32_t vtotal;
 	uint32_t prefill_lines;
 	uint32_t jitter_numer;
@@ -1271,11 +1285,15 @@ int msm_framebuffer_set_cache_hint(struct drm_framebuffer *fb,
 int msm_framebuffer_get_cache_hint(struct drm_framebuffer *fb,
 		u32 *flags, u32 *rd_type, u32 *wr_type);
 
-int msm_fb_obj_get_attrs(struct drm_gem_object *obj,
-		int *fb_ns, int *fb_sec, int *fb_sec_dir);
+int msm_fb_obj_get_attrs(struct drm_gem_object *obj, int *fb_ns,
+		int *fb_sec, int *fb_sec_dir);
 
 struct drm_fb_helper *msm_fbdev_init(struct drm_device *dev);
 void msm_fbdev_free(struct drm_device *dev);
+
+#if IS_ENABLED(CONFIG_DISPLAY_SAMSUNG)
+int __msm_drm_notifier_call_chain(unsigned long event, void *data);
+#endif
 
 struct hdmi;
 #if IS_ENABLED(CONFIG_DRM_MSM_HDMI)

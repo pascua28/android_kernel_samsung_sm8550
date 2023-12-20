@@ -26,6 +26,11 @@ enum data_block_types {
 	USE_EXTENDED_TAG
 };
 
+#if defined(CONFIG_SECDP)
+bool secdp_panel_hdr_supported(void);
+void secdp_logger_hex_dump(void *buf, void *pref, size_t size);
+#endif
+
 static u8 *sde_find_edid_extension(struct edid *edid, int ext_id)
 {
 	u8 *edid_ext = NULL;
@@ -149,6 +154,60 @@ static void sde_edid_extract_vendor_id(struct sde_edid_ctrl *edid_ctrl)
 	SDE_EDID_DEBUG("%s -", __func__);
 }
 
+#if defined(CONFIG_SECDP_SWITCH)
+static struct sde_edid_ctrl *g_edid_ctrl;
+
+int secdp_get_audio_ch(void)
+{
+	if (g_edid_ctrl)
+		return g_edid_ctrl->audio_channel_info;
+
+	return 0;
+}
+EXPORT_SYMBOL(secdp_get_audio_ch);
+#endif
+
+#if defined(CONFIG_SECDP)
+static int secdp_copy_lpcm_audio_data_only(struct sde_edid_ctrl *edid_ctrl,
+			u8 *lpcm_adb, const u8 *adb_no_header, int len)
+{
+	u16 audio_ch = 0;
+	u32 bit_rate = 0;
+	int lpcm_size = 0;
+	const int one_adb_size = 3;
+	int adb_count;
+
+	if (len <= 0)
+		return 0;
+
+	adb_count = len / one_adb_size;
+	while(adb_count > 0) {
+		if ((adb_no_header[0] >> 3) == 1) {
+			/* to support legacy audio info */
+			audio_ch |= (1 << (adb_no_header[0] & 0x7));
+			if ((adb_no_header[0] & 0x7) > 0x04)
+				audio_ch |= 0x20;
+
+			bit_rate = adb_no_header[2] & 0x7;
+			bit_rate |= (adb_no_header[1] & 0x7F) << 3;
+
+			/* copy LPCM codec */
+			memcpy(lpcm_adb + lpcm_size,
+					adb_no_header, one_adb_size);
+			lpcm_size += one_adb_size;
+		}
+
+		adb_no_header += one_adb_size;
+		adb_count--;
+	}
+
+	edid_ctrl->audio_channel_info |= (bit_rate << 16);
+	edid_ctrl->audio_channel_info |= audio_ch;
+
+	return lpcm_size;
+}
+#endif
+
 static void _sde_edid_extract_audio_data_blocks(
 	struct sde_edid_ctrl *edid_ctrl)
 {
@@ -157,11 +216,24 @@ static void _sde_edid_extract_audio_data_blocks(
 	const u8 *adb = NULL;
 	u32 offset = DBC_START_OFFSET;
 	u8 *cea = NULL;
+#if defined(CONFIG_SECDP)
+	u8 *in_buf;
+	int lpcm_size = 0;
+#endif
 
 	if (!edid_ctrl) {
 		SDE_ERROR("invalid edid_ctrl\n");
 		return;
 	}
+
+#if defined(CONFIG_SECDP)
+	in_buf = (u8 *)edid_ctrl->edid;
+	if (in_buf[3] & (1<<6)) {
+		pr_info("default audio\n");
+		edid_ctrl->audio_channel_info |= 2;
+	}
+#endif
+
 	SDE_EDID_DEBUG("%s +", __func__);
 	cea = sde_find_cea_extension(edid_ctrl->edid);
 	if (!cea) {
@@ -189,13 +261,23 @@ static void _sde_edid_extract_audio_data_blocks(
 			continue;
 		}
 
+#if !defined(CONFIG_SECDP)
 		memcpy(edid_ctrl->audio_data_block + edid_ctrl->adb_size,
 			adb + 1, len);
+#else
+		lpcm_size += secdp_copy_lpcm_audio_data_only(edid_ctrl, edid_ctrl->audio_data_block + lpcm_size,
+				adb + 1, len);
+#endif
 		offset = (adb - cea) + 1 + len;
 
 		edid_ctrl->adb_size += len;
 		adb_max++;
 	} while (adb);
+
+#if defined(CONFIG_SECDP)
+	edid_ctrl->adb_size = lpcm_size;
+	pr_info("DP Audio info: 0x%x\n", edid_ctrl->audio_channel_info);
+#endif
 	SDE_EDID_DEBUG("%s -", __func__);
 }
 
@@ -254,6 +336,13 @@ sde_edid_parse_hdr_db(struct drm_connector *connector, const u8 *db)
 
 	if (!db)
 		return;
+
+#if defined(CONFIG_SECDP)
+	if (!secdp_panel_hdr_supported()) {
+		SDE_EDID_DEBUG("connected dongle does not support HDR\n");
+		return;
+	}
+#endif
 
 	len = db[0] & 0x1f;
 	/* Byte 3: Electro-Optical Transfer Functions */
@@ -383,6 +472,9 @@ static void _sde_edid_extract_speaker_allocation_data(
 	u8 len;
 	const u8 *sadb = NULL;
 	u8 *cea = NULL;
+#if defined(CONFIG_SECDP)
+	u16 speaker_allocation = 0;
+#endif
 
 	if (!edid_ctrl) {
 		SDE_ERROR("invalid edid_ctrl\n");
@@ -404,6 +496,9 @@ static void _sde_edid_extract_speaker_allocation_data(
 
 	memcpy(edid_ctrl->spkr_alloc_data_block, sadb + 1, len);
 	edid_ctrl->sadb_size = len;
+#if defined(CONFIG_SECDP)
+	speaker_allocation |= (sadb[1] & 0x7F);
+#endif
 
 	SDE_EDID_DEBUG("speaker alloc data SP byte = %08x %s%s%s%s%s%s%s\n",
 		sadb[1],
@@ -415,6 +510,10 @@ static void _sde_edid_extract_speaker_allocation_data(
 		(sadb[1] & BIT(5)) ? "FLC/FRC," : "",
 		(sadb[1] & BIT(6)) ? "RLC/RRC," : "");
 	SDE_EDID_DEBUG("%s -", __func__);
+
+#if defined(CONFIG_SECDP)
+	edid_ctrl->audio_channel_info |= (speaker_allocation << 8);
+#endif
 }
 
 struct sde_edid_ctrl *sde_edid_init(void)
@@ -488,7 +587,14 @@ u8 sde_get_edid_checksum(void *input)
 	edid = edid_ctrl->edid;
 
 	raw_edid = (u8 *)edid;
+#if !defined(CONFIG_SECDP)
 	raw_edid += (edid->extensions * EDID_LENGTH);
+#else
+	/* fix Prevent_CXX Major defect.
+	 * Dangerous cast: Pointer "raw_edid"( 8 ) to int( 4 ).
+	 */
+	raw_edid = raw_edid + (edid->extensions * EDID_LENGTH);
+#endif
 	last_block = (struct edid *)raw_edid;
 
 	if (last_block)
@@ -517,6 +623,9 @@ void sde_parse_edid(void *input)
 	edid_ctrl = (struct sde_edid_ctrl *)(input);
 
 	if (edid_ctrl->edid) {
+#if defined(CONFIG_SECDP)
+		edid_ctrl->audio_channel_info = 1 << 26;
+#endif
 		sde_edid_extract_vendor_id(edid_ctrl);
 		_sde_edid_extract_audio_data_blocks(edid_ctrl);
 		_sde_edid_extract_speaker_allocation_data(edid_ctrl);
@@ -525,12 +634,39 @@ void sde_parse_edid(void *input)
 	}
 }
 
+#if defined(CONFIG_SECDP)
+extern void secdp_replace_edid(u8* edid);
+#endif
+
 void sde_get_edid(struct drm_connector *connector,
 				  struct i2c_adapter *adapter, void **input)
 {
 	struct sde_edid_ctrl *edid_ctrl = (struct sde_edid_ctrl *)(*input);
 
 	edid_ctrl->edid = drm_get_edid(connector, adapter);
+#if defined(CONFIG_SECDP)
+	if (edid_ctrl->edid) {
+		u8 i, num_extension;
+
+		if (edid_ctrl->custom_edid) {
+			pr_info("[secdp] use custom edid\n");
+			secdp_replace_edid((u8*)edid_ctrl->edid);
+		}
+
+		num_extension = edid_ctrl->edid->extensions;
+		for (i = 0; i <= num_extension; i++) {
+			print_hex_dump(KERN_DEBUG, "EDID: ",
+				DUMP_PREFIX_NONE, 16, 1, edid_ctrl->edid + i,
+				EDID_LENGTH, false);
+			secdp_logger_hex_dump(edid_ctrl->edid + i,
+				"EDID:", EDID_LENGTH);
+		}
+	}
+#if defined(CONFIG_SECDP_SWITCH)
+	g_edid_ctrl = edid_ctrl;
+#endif
+#endif/*CONFIG_SECDP*/
+
 	SDE_EDID_DEBUG("%s +\n", __func__);
 
 	if (!edid_ctrl->edid)
