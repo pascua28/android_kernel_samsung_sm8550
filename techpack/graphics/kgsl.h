@@ -192,6 +192,7 @@ struct kgsl_driver {
 	struct workqueue_struct *workqueue;
 	/* @lockless_workqueue: Pointer to a workqueue handler which doesn't hold device mutex */
 	struct workqueue_struct *lockless_workqueue;
+	struct workqueue_struct *highprio_workqueue;
 };
 
 extern struct kgsl_driver kgsl_driver;
@@ -626,6 +627,11 @@ static inline int timestamp_cmp(unsigned int a, unsigned int b)
 static inline void kgsl_schedule_work(struct work_struct *work)
 {
 	queue_work(kgsl_driver.workqueue, work);
+}
+
+static inline void kgsl_schedule_work_highprio(struct work_struct *work)
+{
+	queue_work(kgsl_driver.highprio_workqueue, work);
 }
 
 static inline struct kgsl_mem_entry *

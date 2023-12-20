@@ -232,7 +232,8 @@ struct kgsl_device {
 	/* For GPU inline submission */
 	uint32_t submit_now;
 	spinlock_t submit_lock;
-	bool slumber;
+	/** @skip_inline_submit: Track if user threads should make an inline submission or not */
+	bool skip_inline_submit;
 
 	struct mutex mutex;
 	uint32_t state;
@@ -508,6 +509,10 @@ struct kgsl_process_private {
 	 * @fg_work: Work struct to schedule foreground work
 	 */
 	struct work_struct fg_work;
+	/**
+	 * @bg_work: Work struct to schedule background work
+	 */
+	struct work_struct bg_work;
 	/**
 	 * @reclaim_lock: Mutex lock to protect KGSL_PROC_PINNED_STATE
 	 */

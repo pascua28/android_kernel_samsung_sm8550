@@ -203,19 +203,9 @@ static void adreno_input_work(struct work_struct *work)
 	mutex_unlock(&device->mutex);
 }
 
-/*
- * Process input events and schedule work if needed.  At this point we are only
- * interested in groking EV_ABS touchscreen events
- */
-static void adreno_input_event(struct input_handle *handle, unsigned int type,
-		unsigned int code, int value)
+void adreno_touch_wake(struct kgsl_device *device)
 {
-	struct kgsl_device *device = handle->handler->private;
 	struct adreno_device *adreno_dev = ADRENO_DEVICE(device);
-
-	/* Only consider EV_ABS (touch) events */
-	if (type != EV_ABS)
-		return;
 
 	/*
 	 * Don't do anything if anything hasn't been rendered since we've been
@@ -247,6 +237,22 @@ static void adreno_input_event(struct input_handle *handle, unsigned int type,
 	} else if (device->state == KGSL_STATE_SLUMBER) {
 		schedule_work(&adreno_dev->input_work);
 	}
+}
+
+/*
+ * Process input events and schedule work if needed.  At this point we are only
+ * interested in groking EV_ABS touchscreen events
+ */
+static void adreno_input_event(struct input_handle *handle, unsigned int type,
+		unsigned int code, int value)
+{
+	struct kgsl_device *device = handle->handler->private;
+
+	/* Only consider EV_ABS (touch) events */
+	if (type != EV_ABS)
+		return;
+
+	adreno_touch_wake(device);
 }
 
 #ifdef CONFIG_INPUT
@@ -370,6 +376,11 @@ void adreno_hang_int_callback(struct adreno_device *adreno_dev, int bit)
 {
 	dev_crit_ratelimited(KGSL_DEVICE(adreno_dev)->dev,
 				"MISC: GPU hang detected\n");
+
+#if IS_ENABLED(CONFIG_SEC_ABC)
+	sec_abc_send_event("MODULE=gpu_qc@WARN=gpu_fault");
+#endif
+
 	adreno_irqctrl(adreno_dev, 0);
 
 	/* Trigger a fault in the dispatcher - this will effect a restart */
