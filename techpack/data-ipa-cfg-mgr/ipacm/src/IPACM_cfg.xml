@@ -7,6 +7,10 @@
 	<IPACM>
 		<IPACMIface>
 			<Iface>
+			   <Name>swlan0</Name>
+			   <Category>UNKNOWN</Category>
+			</Iface>
+			<Iface>
 			   <Name>rndis0</Name>
 			   <Category>LAN</Category>
 			</Iface>
