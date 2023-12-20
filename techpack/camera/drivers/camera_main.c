@@ -27,6 +27,10 @@
 #include "cam_tpg_dev.h"
 #include "cam_flash_dev.h"
 
+#if defined(CONFIG_CAMERA_SYSFS_V2)
+#include "cam_sysfs_init.h"
+#endif
+
 #include "cam_icp_v1_dev.h"
 #include "cam_icp_v2_dev.h"
 #include "ipe_core.h"
@@ -119,6 +123,9 @@ static const struct camera_submodule_component camera_sensor[] = {
 	{&cam_eeprom_driver_init, &cam_eeprom_driver_exit},
 	{&cam_ois_driver_init, &cam_ois_driver_exit},
 	{&cam_flash_init_module, &cam_flash_exit_module},
+#endif
+#if defined(CONFIG_CAMERA_SYSFS_V2)
+	{&cam_sysfs_init_module, &cam_sysfs_exit_module},
 #endif
 };
 

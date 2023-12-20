@@ -82,6 +82,9 @@ int cam_sensor_establish_link(struct cam_req_mgr_core_dev_link_setup *link);
  * This API processes the event which is published by request mgr
  */
 int cam_sensor_process_evt(struct cam_req_mgr_link_evt_data *evt_data);
+#if defined(CONFIG_SAMSUNG_DEBUG_SENSOR_I2C)
+int cam_sensor_process_evt_for_sensor_using_i2c(struct cam_req_mgr_link_evt_data *evt_data);
+#endif
 
 /**
  * @s_ctrl: Sensor ctrl structure

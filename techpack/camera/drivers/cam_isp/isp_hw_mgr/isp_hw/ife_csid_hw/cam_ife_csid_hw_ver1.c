@@ -25,6 +25,11 @@
 #include "cam_common_util.h"
 #include "cam_subdev.h"
 
+#if defined(CONFIG_USE_CAMERA_HW_BIG_DATA)
+#include "cam_sensor_cmn_header.h"
+#include "cam_hw_bigdata.h"
+#endif
+
 #define IFE_CSID_TIMEOUT                               1000
 
 /* Timeout values in usec */
@@ -1617,9 +1622,6 @@ bool cam_ife_csid_ver1_is_width_valid(
 		width = reserve->in_port->right_stop -
 			reserve->in_port->right_start + 1;
 
-	if (reserve->in_port->horizontal_bin || reserve->in_port->qcfa_bin)
-		width /= 2;
-
 	if (!cam_ife_csid_ver1_is_width_valid_by_fuse(csid_hw, width)) {
 		CAM_ERR(CAM_ISP, "CSID[%u] width limited by fuse",
 			csid_hw->hw_intf->hw_idx);
@@ -2227,12 +2229,10 @@ static int cam_ife_csid_ver1_init_config_rdi_path(
 		cam_io_w_mb(val, mem_base + path_reg->multi_vcdt_cfg0_addr);
 	}
 
+	val = 0;
 	/*configure cfg1 addr
 	 * Timestamp strobe selection
 	 */
-
-	val = cam_io_r_mb(mem_base + path_reg->cfg1_addr);
-
 	val |= cmn_reg->timestamp_strobe_val <<
 			cmn_reg->timestamp_stb_sel_shift_val;
 
@@ -2552,9 +2552,7 @@ static int cam_ife_csid_ver1_init_config_pxl_path(
 	 * timestamp strobe selection
 	 */
 
-	val = cam_io_r_mb(mem_base + path_reg->cfg1_addr);
-
-	val |= cmn_reg->timestamp_strobe_val <<
+	val = cmn_reg->timestamp_strobe_val <<
 		cmn_reg->timestamp_stb_sel_shift_val;
 
 	cam_io_w_mb(val, mem_base + path_reg->cfg1_addr);
@@ -2793,13 +2791,12 @@ int cam_ife_csid_ver1_init_hw(void *hw_priv,
 	default:
 		CAM_ERR(CAM_ISP, "CSID:%d Invalid Res id %d",
 			csid_hw->hw_intf->hw_idx, res->res_id);
-		rc = -EINVAL;
 		break;
 	}
 
 	if (rc < 0) {
-		CAM_ERR(CAM_ISP, "CSID:%d res_id:%d path init configuration failed with rc: %d",
-			csid_hw->hw_intf->hw_idx, res->res_id, rc);
+		CAM_ERR(CAM_ISP, "CSID:%d res_id:%d path init configuration Failed",
+			csid_hw->hw_intf->hw_idx, res->res_id);
 		goto end;
 	}
 
@@ -3212,9 +3209,6 @@ int cam_ife_csid_ver1_stop(void *hw_priv,
 		csid_hw->hw_intf->hw_idx,
 		csid_stop->num_res);
 	cam_ife_csid_ver1_tpg_stop(csid_hw);
-
-	csid_hw->flags.device_enabled = false;
-
 	/* Stop the resource first */
 	for (i = 0; i < csid_stop->num_res; i++) {
 
@@ -3777,10 +3771,6 @@ static int cam_ife_csid_ver1_process_cmd(void *hw_priv,
 		/* Not supported for V1 */
 		rc = 0;
 		break;
-	case CAM_IFE_CSID_RESET_OUT_OF_SYNC_CNT:
-		/* Not supported for V1 */
-		rc = 0;
-		break;
 	default:
 		CAM_ERR(CAM_ISP, "CSID:%d unsupported cmd:%d",
 			csid_hw->hw_intf->hw_idx, cmd_type);
@@ -3969,6 +3959,11 @@ static int cam_ife_csid_ver1_rx_bottom_half_handler(
 	struct cam_hw_soc_info                     *soc_info;
 	uint32_t                                    data_idx;
 
+#if defined(CONFIG_USE_CAMERA_HW_BIG_DATA)
+	uint32_t hw_cam_position = 0;
+	uint32_t hwb_mipi_err = FALSE;
+#endif
+
 	if (!csid_hw || !evt_payload) {
 		CAM_ERR(CAM_ISP,
 			"Invalid Param handler_priv %pK evt_payload_priv %pK",
@@ -4044,6 +4039,9 @@ static int cam_ife_csid_ver1_rx_bottom_half_handler(
 		}
 
 		if (irq_status & IFE_CSID_VER1_RX_ERROR_ECC) {
+#if defined(CONFIG_USE_CAMERA_HW_BIG_DATA)
+			hwb_mipi_err |= TRUE;
+#endif
 			event_type |= CAM_ISP_HW_ERROR_CSID_PKT_HDR_CORRUPTED;
 			CAM_ERR_BUF(CAM_ISP, log_buf, CAM_IFE_CSID_LOG_BUF_LEN, &len,
 				"DPHY_ERROR_ECC: Pkt hdr errors unrecoverable\n");
@@ -4065,6 +4063,9 @@ static int cam_ife_csid_ver1_rx_bottom_half_handler(
 		}
 
 		if (irq_status & IFE_CSID_VER1_RX_ERROR_CRC) {
+#if defined(CONFIG_USE_CAMERA_HW_BIG_DATA)
+			hwb_mipi_err |= TRUE;
+#endif
 			event_type |= CAM_ISP_HW_ERROR_CSID_PKT_PAYLOAD_CORRUPTED;
 			CAM_ERR_BUF(CAM_ISP, log_buf, CAM_IFE_CSID_LOG_BUF_LEN, &len,
 				"CPHY_ERROR_CRC: Long pkt payload CRC mismatch\n");
@@ -4115,6 +4116,16 @@ static int cam_ife_csid_ver1_rx_bottom_half_handler(
 		cam_ife_csid_ver1_handle_event_err(csid_hw, evt_payload, event_type);
 		csid_hw->flags.reset_awaited = true;
 	}
+
+#if defined(CONFIG_USE_CAMERA_HW_BIG_DATA)
+	if (hwb_mipi_err == TRUE) {
+		msm_is_sec_get_sensor_position(&hw_cam_position);
+		{
+			hw_bigdata_mipi_from_ife_csid_ver1(hw_cam_position);
+		}
+	}
+#endif
+
 
 	return IRQ_HANDLED;
 }
@@ -4187,14 +4198,6 @@ static int cam_ife_csid_ver1_bottom_half_handler(
 
 	csid_hw = (struct cam_ife_csid_ver1_hw *)handler_priv;
 	evt_payload = (struct cam_ife_csid_ver1_evt_payload *)evt_payload_priv;
-
-	if (!csid_hw->flags.device_enabled) {
-		CAM_DBG(CAM_ISP, "CSID[%d] bottom-half after csid stop",
-			csid_hw->hw_intf->hw_idx);
-		cam_ife_csid_ver1_put_evt_payload(csid_hw, &evt_payload,
-			&csid_hw->free_payload_list);
-		return 0;
-	}
 
 	if (evt_payload->irq_status[CAM_IFE_CSID_IRQ_REG_RX])
 		cam_ife_csid_ver1_rx_bottom_half_handler(

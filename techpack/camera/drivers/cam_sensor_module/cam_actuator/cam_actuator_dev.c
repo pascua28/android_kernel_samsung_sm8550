@@ -12,6 +12,10 @@
 #include "camera_main.h"
 #include "cam_compat.h"
 
+#if defined(CONFIG_SAMSUNG_OIS_MCU_STM32) || defined(CONFIG_SAMSUNG_OIS_RUMBA_S4) || defined(CONFIG_SAMSUNG_ACTUATOR_PREVENT_SHAKING)
+struct cam_actuator_ctrl_t *g_a_ctrls[SEC_SENSOR_ID_MAX];
+#endif
+
 static struct cam_i3c_actuator_data {
 	struct cam_actuator_ctrl_t                  *a_ctrl;
 	struct completion                            probe_complete;
@@ -171,7 +175,7 @@ static int cam_actuator_init_subdev(struct cam_actuator_ctrl_t *a_ctrl)
 		 CAM_SD_CLOSE_MEDIUM_PRIORITY;
 
 	rc = cam_register_subdev(&(a_ctrl->v4l2_dev_str));
-	if (rc)
+	if ((rc < 0) && (rc != -EPROBE_DEFER))
 		CAM_ERR(CAM_ACTUATOR,
 			"Fail with cam_register_subdev rc: %d", rc);
 
@@ -253,6 +257,12 @@ static int cam_actuator_i2c_component_bind(struct device *dev,
 		cam_actuator_apply_request;
 	a_ctrl->last_flush_req = 0;
 	a_ctrl->cam_act_state = CAM_ACTUATOR_INIT;
+
+
+#if defined(CONFIG_SAMSUNG_OIS_MCU_STM32) || defined(CONFIG_SAMSUNG_OIS_RUMBA_S4) || defined(CONFIG_SAMSUNG_ACTUATOR_PREVENT_SHAKING)
+	if (a_ctrl->soc_info.index < SEC_SENSOR_ID_MAX)
+		g_a_ctrls[a_ctrl->soc_info.index] = a_ctrl;
+#endif
 
 	return rc;
 
@@ -430,6 +440,10 @@ static int cam_actuator_platform_component_bind(struct device *dev,
 	g_i3c_actuator_data[a_ctrl->soc_info.index].a_ctrl = a_ctrl;
 	init_completion(&g_i3c_actuator_data[a_ctrl->soc_info.index].probe_complete);
 
+#if defined(CONFIG_SAMSUNG_OIS_MCU_STM32) || defined(CONFIG_SAMSUNG_OIS_RUMBA_S4) || defined(CONFIG_SAMSUNG_ACTUATOR_PREVENT_SHAKING)
+	if (a_ctrl->soc_info.index < SEC_SENSOR_ID_MAX)
+		g_a_ctrls[a_ctrl->soc_info.index] = a_ctrl;
+#endif
 	return rc;
 
 free_mem:

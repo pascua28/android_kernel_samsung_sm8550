@@ -351,6 +351,7 @@ EXPORT_SYMBOL(cam_mem_get_io_buf);
 int cam_mem_get_cpu_buf(int32_t buf_handle, uintptr_t *vaddr_ptr, size_t *len)
 {
 	int idx;
+	int ret = 0;
 
 	if (!atomic_read(&cam_mem_mgr_state)) {
 		CAM_ERR(CAM_MEM, "failed. mem_mgr not initialized");
@@ -364,17 +365,24 @@ int cam_mem_get_cpu_buf(int32_t buf_handle, uintptr_t *vaddr_ptr, size_t *len)
 	if (idx >= CAM_MEM_BUFQ_MAX || idx <= 0)
 		return -EINVAL;
 
+	mutex_lock(&tbl.bufq[idx].q_lock);
+
 	if (!tbl.bufq[idx].active) {
 		CAM_ERR(CAM_MEM, "Buffer at idx=%d is already unmapped,",
 			idx);
-		return -EPERM;
+		ret = -EPERM;
+		goto end;
 	}
 
-	if (buf_handle != tbl.bufq[idx].buf_handle)
-		return -EINVAL;
+	if (buf_handle != tbl.bufq[idx].buf_handle) {
+		ret = -EINVAL;
+		goto end;
+	}
 
-	if (!(tbl.bufq[idx].flags & CAM_MEM_FLAG_KMD_ACCESS))
-		return -EINVAL;
+	if (!(tbl.bufq[idx].flags & CAM_MEM_FLAG_KMD_ACCESS)) {
+		ret = -EINVAL;
+		goto end;
+	}
 
 	if (tbl.bufq[idx].kmdvaddr) {
 		*vaddr_ptr = tbl.bufq[idx].kmdvaddr;
@@ -382,10 +390,13 @@ int cam_mem_get_cpu_buf(int32_t buf_handle, uintptr_t *vaddr_ptr, size_t *len)
 	} else {
 		CAM_ERR(CAM_MEM, "No KMD access was requested for 0x%x handle",
 			buf_handle);
-		return -EINVAL;
+		ret = -EINVAL;
+		goto end;
 	}
 
-	return 0;
+end:
+	mutex_unlock(&tbl.bufq[idx].q_lock);
+	return ret;
 }
 EXPORT_SYMBOL(cam_mem_get_cpu_buf);
 
@@ -673,7 +684,6 @@ static int cam_mem_util_get_dma_buf(size_t len,
 	struct dma_heap *try_heap = NULL;
 	struct timespec64 ts1, ts2;
 	long microsec = 0;
-	bool use_cached_heap = false;
 	struct mem_buf_lend_kernel_arg arg;
 	int vmids[CAM_MAX_VMIDS];
 	int perms[CAM_MAX_VMIDS];
@@ -693,20 +703,19 @@ static int cam_mem_util_get_dma_buf(size_t len,
 		CAM_DBG(CAM_MEM,
 			"Using CACHED heap, cam_flags=0x%x, force_cache_allocs=%d",
 			cam_flags, tbl.force_cache_allocs);
-		use_cached_heap = true;
 	} else if (cam_flags & CAM_MEM_FLAG_PROTECTED_MODE) {
-		use_cached_heap = true;
 		CAM_DBG(CAM_MEM,
 			"Using CACHED heap for secure, cam_flags=0x%x, force_cache_allocs=%d",
 			cam_flags, tbl.force_cache_allocs);
 	} else {
-		use_cached_heap = false;
-		if (!tbl.system_uncached_heap) {
-			CAM_ERR(CAM_MEM,
-				"Using UNCACHED heap not supported, cam_flags=0x%x, force_cache_allocs=%d",
-				cam_flags, tbl.force_cache_allocs);
-			return -EINVAL;
-		}
+		CAM_ERR(CAM_MEM,
+			"Using UNCACHED heap not supported, cam_flags=0x%x, force_cache_allocs=%d",
+			cam_flags, tbl.force_cache_allocs);
+		/*
+		 * Need a better handling based on whether dma-buf-heaps support
+		 * uncached heaps or not. For now, assume not supported.
+		 */
+		return -EINVAL;
 	}
 
 	if (cam_flags & CAM_MEM_FLAG_PROTECTED_MODE) {
@@ -737,12 +746,9 @@ static int cam_mem_util_get_dma_buf(size_t len,
 		heap = tbl.ubwc_p_heap;
 		CAM_DBG(CAM_MEM, "Allocating from ubwc-p heap, size=%d, flags=0x%x",
 			len, cam_flags);
-	} else if (use_cached_heap) {
+	} else {
 		try_heap = tbl.camera_heap;
 		heap = tbl.system_heap;
-	} else {
-		try_heap = tbl.camera_uncached_heap;
-		heap = tbl.system_uncached_heap;
 	}
 
 	CAM_DBG(CAM_MEM, "Using heaps : try=%pK, heap=%pK", try_heap, heap);
@@ -758,7 +764,7 @@ static int cam_mem_util_get_dma_buf(size_t len,
 	if (try_heap) {
 		*buf = dma_heap_buffer_alloc(try_heap, len, O_RDWR, 0);
 		if (IS_ERR(*buf)) {
-			CAM_WARN(CAM_MEM,
+			CAM_DBG(CAM_MEM,
 				"Failed in allocating from try heap, heap=%pK, len=%zu, err=%d",
 				try_heap, len, PTR_ERR(*buf));
 			*buf = NULL;
@@ -1112,7 +1118,7 @@ int cam_mem_mgr_alloc_and_map(struct cam_mem_mgr_alloc_cmd_v2 *cmd)
 	}
 
 	if (cam_dma_buf_set_name(dmabuf, cmd->buf_name))
-		CAM_ERR(CAM_MEM, "set dma buffer name(%s) failed", cmd->buf_name);
+		CAM_DBG(CAM_MEM, "set dma buffer name(%s) failed", cmd->buf_name);
 
 	if ((cmd->flags & CAM_MEM_FLAG_HW_READ_WRITE) ||
 		(cmd->flags & CAM_MEM_FLAG_HW_SHARED_ACCESS) ||

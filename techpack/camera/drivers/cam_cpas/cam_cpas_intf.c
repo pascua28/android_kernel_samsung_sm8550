@@ -627,31 +627,6 @@ int cam_cpas_select_qos_settings(uint32_t selection_mask)
 }
 EXPORT_SYMBOL(cam_cpas_select_qos_settings);
 
-int cam_cpas_enable_tpg_mux_sel(uint32_t tpg_mux_sel)
-{
-	int rc = 0;
-
-	if (!CAM_CPAS_INTF_INITIALIZED()) {
-		CAM_ERR(CAM_CPAS, "cpas intf not initialized");
-		return -EBADR;
-	}
-
-	if (g_cpas_intf->hw_intf->hw_ops.process_cmd) {
-		rc = g_cpas_intf->hw_intf->hw_ops.process_cmd(
-			g_cpas_intf->hw_intf->hw_priv,
-			CAM_CPAS_HW_CMD_TPG_MUX_SEL, &tpg_mux_sel,
-			sizeof(tpg_mux_sel));
-		if (rc)
-			CAM_ERR(CAM_CPAS, "Failed in process_cmd, rc=%d", rc);
-	} else {
-		CAM_ERR(CAM_CPAS, "Invalid process_cmd ops");
-		rc = -EBADR;
-	}
-
-	return rc;
-}
-EXPORT_SYMBOL(cam_cpas_enable_tpg_mux_sel);
-
 int cam_cpas_notify_event(const char *identifier_string,
 	int32_t identifier_value)
 {
@@ -1084,7 +1059,7 @@ static int cam_cpas_dev_component_bind(struct device *dev,
 		return -EALREADY;
 	}
 
-	g_cpas_intf = kzalloc(sizeof(*g_cpas_intf), GFP_KERNEL);
+	g_cpas_intf = kvzalloc(sizeof(*g_cpas_intf), GFP_KERNEL);
 	if (!g_cpas_intf)
 		return -ENOMEM;
 
@@ -1130,7 +1105,7 @@ error_hw_remove:
 	cam_cpas_hw_remove(g_cpas_intf->hw_intf);
 error_destroy_mem:
 	mutex_destroy(&g_cpas_intf->intf_lock);
-	kfree(g_cpas_intf);
+	kvfree(g_cpas_intf);
 	g_cpas_intf = NULL;
 	CAM_ERR(CAM_CPAS, "CPAS component bind failed");
 	return rc;
@@ -1150,7 +1125,7 @@ static void cam_cpas_dev_component_unbind(struct device *dev,
 	cam_cpas_hw_remove(g_cpas_intf->hw_intf);
 	mutex_unlock(&g_cpas_intf->intf_lock);
 	mutex_destroy(&g_cpas_intf->intf_lock);
-	kfree(g_cpas_intf);
+	kvfree(g_cpas_intf);
 	g_cpas_intf = NULL;
 }
 

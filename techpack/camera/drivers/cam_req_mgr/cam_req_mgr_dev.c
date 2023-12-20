@@ -32,6 +32,7 @@
 #include "cam_compat.h"
 #include "camera_main.h"
 
+
 #define CAM_REQ_MGR_EVENT_MAX 30
 #define CAM_I3C_MASTER_COMPAT "qcom,geni-i3c"
 
@@ -267,8 +268,16 @@ static void cam_v4l2_event_queue_notify_error(const struct v4l2_event *old,
 	switch (old->id) {
 	case V4L_EVENT_CAM_REQ_MGR_SOF:
 	case V4L_EVENT_CAM_REQ_MGR_SOF_BOOT_TS:
-	case V4L_EVENT_CAM_REQ_MGR_SOF_UNIFIED_TS:
-		if (ev_header->u.frame_msg.request_id)
+	case V4L_EVENT_CAM_REQ_MGR_SOF_UNIFIED_TS: {
+		int32_t link_hdl = 0;
+
+		/* Get the link_hdl field correctly */
+		if (old->id == V4L_EVENT_CAM_REQ_MGR_SOF_UNIFIED_TS)
+			link_hdl = ev_header->u.frame_msg_v2.link_hdl;
+		else
+			link_hdl = ev_header->u.frame_msg.link_hdl;
+
+		if (ev_header->u.frame_msg.request_id) {
 			CAM_ERR(CAM_CRM,
 				"Failed to notify %s Sess %X FrameId %lld FrameMeta %d ReqId %lld link %X",
 				((old->id == V4L_EVENT_CAM_REQ_MGR_SOF) ?
@@ -277,9 +286,12 @@ static void cam_v4l2_event_queue_notify_error(const struct v4l2_event *old,
 				ev_header->session_hdl,
 				ev_header->u.frame_msg.frame_id,
 				ev_header->u.frame_msg.frame_id_meta,
-				ev_header->u.frame_msg.request_id,
-				ev_header->u.frame_msg.link_hdl);
-		else
+				ev_header->u.frame_msg.request_id, link_hdl);
+
+				/* Notify recovery for valid shutter drop */
+				cam_req_mgr_notify_event_drop(link_hdl,
+					ev_header->u.frame_msg.request_id);
+		} else {
 			CAM_WARN_RATE_LIMIT_CUSTOM(CAM_CRM, 5, 1,
 				"Failed to notify %s Sess %X FrameId %lld FrameMeta %d ReqId %lld link %X",
 				((old->id == V4L_EVENT_CAM_REQ_MGR_SOF) ?
@@ -288,8 +300,9 @@ static void cam_v4l2_event_queue_notify_error(const struct v4l2_event *old,
 				ev_header->session_hdl,
 				ev_header->u.frame_msg.frame_id,
 				ev_header->u.frame_msg.frame_id_meta,
-				ev_header->u.frame_msg.request_id,
-				ev_header->u.frame_msg.link_hdl);
+				ev_header->u.frame_msg.request_id, link_hdl);
+		}
+	}
 		break;
 	case V4L_EVENT_CAM_REQ_MGR_ERROR:
 		CAM_ERR_RATE_LIMIT(CAM_CRM,
@@ -1087,15 +1100,21 @@ static int cam_req_mgr_probe(struct platform_device *pdev)
 	int rc = 0, i;
 	struct component_match *match_list = NULL;
 	struct device *dev = &pdev->dev;
-	struct device_node *np = NULL;
+	struct device_node *np = NULL, *np_master = NULL;;
+
+	CAM_ERR(CAM_CRM, "ENTER: CRM PROBE");
 
 	for (i = 0; i < ARRAY_SIZE(cam_component_i2c_drivers); i++) {
+		CAM_ERR(CAM_CRM, "I2C driver[%d]:%s", i,
+			cam_component_i2c_drivers[i]->driver.of_match_table->compatible);
 		while ((np = of_find_compatible_node(np, NULL,
 			cam_component_i2c_drivers[i]->driver.of_match_table->compatible))) {
+			np_master = of_get_parent(np);
 			if (of_device_is_available(np) && !(of_find_i2c_device_by_node(np))) {
 				CAM_INFO_RATE_LIMIT(CAM_CRM,
-					"I2C device: %s not available, deferring probe",
-					np->full_name);
+					"I2C device: %s not available, master device: %s, deferring probe",
+					np->full_name,
+					(np_master) ? np_master->full_name : "NULL");
 				rc = -EPROBE_DEFER;
 				goto end;
 			}
@@ -1164,5 +1183,6 @@ void cam_req_mgr_exit(void)
 	platform_driver_unregister(&cam_req_mgr_driver);
 }
 
+MODULE_SOFTDEP("pre: i2c-msm-geni");
 MODULE_DESCRIPTION("Camera Request Manager");
 MODULE_LICENSE("GPL v2");

@@ -445,8 +445,7 @@ static int cam_jpeg_mgr_bottom_half_irq(void *priv, void *data)
 			CAM_JPEG_CMD_DUMP_HW_MISR_VAL, &misr_args,
 			sizeof(struct cam_jpeg_misr_dump_args));
 		if (rc)
-			CAM_WARN_RATE_LIMIT(CAM_JPEG, "jpeg and camnoc hw misr enable failed %d",
-				rc);
+			CAM_ERR(CAM_JPEG, "jpeg and camnoc hw misr enable failed %d", rc);
 	}
 
 	/* If we have processed just plane 1 for jpeg dma,
@@ -1012,8 +1011,7 @@ static int cam_jpeg_mgr_prepare_hw_update(void *hw_mgr_priv,
 		return rc;
 	}
 
-	if (!packet->num_cmd_buf ||
-		(packet->num_cmd_buf > CAM_JPEG_MAX_NUM_CMD_BUFFS) ||
+	if ((packet->num_cmd_buf > CAM_JPEG_MAX_NUM_CMD_BUFFS) ||
 		!packet->num_patches || !packet->num_io_configs ||
 		(packet->num_io_configs > CAM_JPEG_IMAGE_MAX)) {
 		CAM_ERR(CAM_JPEG,
@@ -1037,6 +1035,7 @@ static int cam_jpeg_mgr_prepare_hw_update(void *hw_mgr_priv,
 		sizeof(struct cam_buf_io_cfg),
 		packet->header.request_id,
 		ctx_data->jpeg_dev_acquire_info.dev_type);
+	prepare_args->pf_data->packet = packet;
 
 	prepare_args->num_out_map_entries = 0;
 
@@ -1934,22 +1933,17 @@ static void cam_jpeg_mgr_dump_pf_data(
 	struct cam_jpeg_hw_mgr  *hw_mgr,
 	struct cam_hw_cmd_args  *hw_cmd_args)
 {
-	struct cam_jpeg_hw_ctx_data       *ctx_data;
-	struct cam_packet                 *packet;
-	struct cam_jpeg_match_pid_args     jpeg_pid_mid_args;
-	struct cam_hw_dump_pf_args        *pf_args;
-	struct cam_hw_mgr_pf_request_info *pf_req_info;
-	uint32_t                           dev_type;
-	bool                               hw_pid_support = true;
-	int                                rc = 0;
+	struct cam_jpeg_hw_ctx_data   *ctx_data;
+	struct cam_packet             *packet;
+	struct cam_jpeg_match_pid_args jpeg_pid_mid_args;
+	struct cam_hw_dump_pf_args    *pf_args;
+	uint32_t                       dev_type;
+	bool                           hw_pid_support = true;
+	int                            rc = 0;
 
 	ctx_data = (struct cam_jpeg_hw_ctx_data  *)hw_cmd_args->ctxt_to_hw_map;
 	pf_args = hw_cmd_args->u.pf_cmd_args->pf_args;
-	pf_req_info = hw_cmd_args->u.pf_cmd_args->pf_req_info;
-	rc = cam_packet_util_get_packet_addr(&packet,
-		pf_req_info->packet_handle, pf_req_info->packet_offset);
-	if (rc)
-		return;
+	packet  = hw_cmd_args->u.pf_cmd_args->pf_req_info->packet;
 
 	jpeg_pid_mid_args.fault_mid = pf_args->pf_smmu_info->mid;
 	jpeg_pid_mid_args.pid = pf_args->pf_smmu_info->pid;

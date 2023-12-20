@@ -1889,7 +1889,7 @@ static int cam_cpas_hw_start(void *hw_priv, void *start_args,
 	if (!ahb_vote || !cmd_hw_start->axi_vote)
 		return -EINVAL;
 
-	if (!ahb_vote->vote.level) {
+	if (ahb_vote->vote.level == CAM_SUSPEND_VOTE) {
 		CAM_ERR(CAM_CPAS, "Invalid vote ahb[%d]",
 			ahb_vote->vote.level);
 		return -EINVAL;
@@ -2831,32 +2831,6 @@ done:
 	return rc;
 }
 
-static int cam_cpas_hw_enable_tpg_mux_sel(struct cam_hw_info *cpas_hw,
-	uint32_t tpg_mux)
-{
-	struct cam_cpas *cpas_core = (struct cam_cpas *) cpas_hw->core_info;
-	int rc = 0;
-
-	mutex_lock(&cpas_hw->hw_mutex);
-
-	if (cpas_core->internal_ops.set_tpg_mux_sel) {
-		rc = cpas_core->internal_ops.set_tpg_mux_sel(
-			cpas_hw, tpg_mux);
-		if (rc) {
-			CAM_ERR(CAM_CPAS,
-				"failed in tpg mux selection rc=%d",
-				rc);
-		}
-	} else {
-		CAM_ERR(CAM_CPAS,
-			"CPAS tpg mux sel not enabled");
-		rc = -EINVAL;
-	}
-
-	mutex_unlock(&cpas_hw->hw_mutex);
-	return rc;
-}
-
 static int cam_cpas_activate_cache(
 	struct cam_hw_info *cpas_hw,
 	struct cam_sys_cache_info *cache_info)
@@ -3304,19 +3278,7 @@ static int cam_cpas_hw_process_cmd(void *hw_priv,
 		rc = cam_cpas_hw_csid_process_resume(hw_priv, *csid_idx);
 		break;
 	}
-	case CAM_CPAS_HW_CMD_TPG_MUX_SEL: {
-		uint32_t *tpg_mux_sel;
 
-		if (sizeof(uint32_t) != arg_size) {
-			CAM_ERR(CAM_CPAS, "cmd_type %d, size mismatch %d",
-				cmd_type, arg_size);
-			break;
-		}
-
-		tpg_mux_sel = (uint32_t *)cmd_args;
-		rc = cam_cpas_hw_enable_tpg_mux_sel(hw_priv, *tpg_mux_sel);
-		break;
-	}
 	default:
 		CAM_ERR(CAM_CPAS, "CPAS HW command not valid =%d", cmd_type);
 		break;
@@ -3347,7 +3309,7 @@ int cam_cpas_util_client_cleanup(struct cam_hw_info *cpas_hw)
 			cpas_core->cpas_client[i]->registered) {
 			cam_cpas_hw_unregister_client(cpas_hw, i);
 		}
-		kfree(cpas_core->cpas_client[i]);
+		kvfree(cpas_core->cpas_client[i]);
 		cpas_core->cpas_client[i] = NULL;
 		mutex_destroy(&cpas_core->client_mutex[i]);
 	}
@@ -3411,6 +3373,7 @@ static int cam_cpas_util_create_debugfs(struct cam_cpas *cpas_core)
 
 	debugfs_create_bool("force_hlos_drv", 0644,
 		cpas_core->dentry, &cpas_core->force_hlos_drv);
+	cpas_core->full_state_dump = true;
 end:
 	return rc;
 }
@@ -3426,20 +3389,20 @@ int cam_cpas_hw_probe(struct platform_device *pdev,
 	struct cam_cpas_private_soc *soc_private;
 	struct cam_cpas_internal_ops *internal_ops;
 
-	cpas_hw_intf = kzalloc(sizeof(struct cam_hw_intf), GFP_KERNEL);
+	cpas_hw_intf = kvzalloc(sizeof(struct cam_hw_intf), GFP_KERNEL);
 	if (!cpas_hw_intf)
 		return -ENOMEM;
 
-	cpas_hw = kzalloc(sizeof(struct cam_hw_info), GFP_KERNEL);
+	cpas_hw = kvzalloc(sizeof(struct cam_hw_info), GFP_KERNEL);
 	if (!cpas_hw) {
-		kfree(cpas_hw_intf);
+		kvfree(cpas_hw_intf);
 		return -ENOMEM;
 	}
 
-	cpas_core = kzalloc(sizeof(struct cam_cpas), GFP_KERNEL);
+	cpas_core = kvzalloc(sizeof(struct cam_cpas), GFP_KERNEL);
 	if (!cpas_core) {
-		kfree(cpas_hw);
-		kfree(cpas_hw_intf);
+		kvfree(cpas_hw);
+		kvfree(cpas_hw_intf);
 		return -ENOMEM;
 	}
 
@@ -3586,9 +3549,9 @@ release_workq:
 	destroy_workqueue(cpas_core->work_queue);
 release_mem:
 	mutex_destroy(&cpas_hw->hw_mutex);
-	kfree(cpas_core);
-	kfree(cpas_hw);
-	kfree(cpas_hw_intf);
+	kvfree(cpas_core);
+	kvfree(cpas_hw);
+	kvfree(cpas_hw_intf);
 	CAM_ERR(CAM_CPAS, "failed in hw probe");
 	return rc;
 }
@@ -3620,9 +3583,9 @@ int cam_cpas_hw_remove(struct cam_hw_intf *cpas_hw_intf)
 	flush_workqueue(cpas_core->work_queue);
 	destroy_workqueue(cpas_core->work_queue);
 	mutex_destroy(&cpas_hw->hw_mutex);
-	kfree(cpas_core);
-	kfree(cpas_hw);
-	kfree(cpas_hw_intf);
+	kvfree(cpas_core);
+	kvfree(cpas_hw);
+	kvfree(cpas_hw_intf);
 
 	return 0;
 }

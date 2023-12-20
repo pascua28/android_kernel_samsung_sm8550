@@ -247,7 +247,6 @@ struct hfi_frame_process_info {
  * @num_paths: Number of valid AXI paths
  * @axi_path: ctx based per path bw vote
  * @bw_included: Whether bw of this context is included in overal voting
- * @max_supported_clk_level: max supported clock level
  */
 struct cam_ctx_clk_info {
 	uint32_t curr_fc;
@@ -260,7 +259,6 @@ struct cam_ctx_clk_info {
 	uint32_t num_paths;
 	struct cam_cpas_axi_per_path_bw_vote axi_path[CAM_ICP_MAX_PER_PATH_VOTES];
 	bool bw_included;
-	uint32_t max_supported_clk_level;
 };
 
 /**
@@ -399,6 +397,7 @@ struct cam_icp_clk_info {
  * @icp_debug_type : entry to enable FW debug message/qdss
  * @icp_dbg_lvl : debug level set to FW.
  * @icp_fw_dump_lvl : level set for dumping the FW data
+ * @icp_fw_ramdump_lvl : level set for FW ram dumps
  * @ipe0_enable: Flag for IPE0
  * @ipe1_enable: Flag for IPE1
  * @bps_enable: Flag for BPS
@@ -453,6 +452,7 @@ struct cam_icp_hw_mgr {
 	u64 icp_debug_type;
 	u64 icp_dbg_lvl;
 	u64 icp_fw_dump_lvl;
+	u32 icp_fw_ramdump_lvl;
 	bool ipe0_enable;
 	bool ipe1_enable;
 	bool bps_enable;

@@ -31,11 +31,64 @@
 
 #define CAM_COMMON_NS_PER_MS              1000000ULL
 
+#if defined(CONFIG_SAMSUNG_DEBUG_HW_INFO)
+#if defined(CONFIG_SEC_DM1Q_PROJECT) || defined(CONFIG_SEC_DM2Q_PROJECT)
+#define WIDE_CAM 1
+#define UW_CAM 2
+#define TELE1_CAM 0
+#define TELE2_CAM -1
+#define FRONT_CAM 4
+#define COVER_CAM -2
+#define FRONT_AUX -3
+#elif defined(CONFIG_SEC_B5Q_PROJECT) || defined(CONFIG_SEC_GTS9P_PROJECT)
+#define WIDE_CAM 1
+#define UW_CAM 2
+#define TELE1_CAM -1
+#define TELE2_CAM -4
+#define FRONT_CAM 4
+#define COVER_CAM -2
+#define FRONT_AUX -3
+#elif defined(CONFIG_SEC_GTS9_PROJECT)
+#define WIDE_CAM 1
+#define UW_CAM -4
+#define TELE1_CAM -1
+#define TELE2_CAM -5
+#define FRONT_CAM 4
+#define COVER_CAM -2
+#define FRONT_AUX -3 
+#elif defined(CONFIG_SEC_GTS9U_PROJECT)
+#define WIDE_CAM 1
+#define UW_CAM 2
+#define TELE1_CAM -1
+#define TELE2_CAM -3
+#define FRONT_CAM 4
+#define COVER_CAM -2
+#define FRONT_AUX 5
+#elif defined(CONFIG_SEC_DM3Q_PROJECT)
+#define WIDE_CAM 5
+#define UW_CAM 3
+#define TELE1_CAM 2
+#define TELE2_CAM 1
+#define FRONT_CAM 4
+#define COVER_CAM -1
+#define FRONT_AUX -2
+#elif defined(CONFIG_SEC_Q5Q_PROJECT)
+#define WIDE_CAM 3
+#define UW_CAM 5
+#define TELE1_CAM 2
+#define TELE2_CAM -1
+#define FRONT_CAM 4
+#define COVER_CAM 0
+#define FRONT_AUX -2
+#endif
+#endif
+
 #define PTR_TO_U64(ptr) ((uint64_t)(uintptr_t)ptr)
 #define U64_TO_PTR(ptr) ((void *)(uintptr_t)ptr)
 
 #define CAM_TRIGGER_PANIC(format, args...) panic("CAMERA - " format "\n", ##args)
 
+#define CAM_GET_BOOT_TIMESTAMP(timestamp) ktime_get_boottime_ts64(&(timestamp))
 #define CAM_GET_TIMESTAMP(timestamp) ktime_get_real_ts64(&(timestamp))
 #define CAM_GET_TIMESTAMP_DIFF_IN_MICRO(ts_start, ts_end, diff_microsec)                     \
 ({                                                                                           \
@@ -351,4 +404,7 @@ int cam_common_register_err_inject_cb(
 	cam_common_err_inject_cb err_inject_cb,
 	enum cam_common_err_inject_hw_id hw_id);
 
+#if defined(CONFIG_SAMSUNG_DEBUG_HW_INFO)
+void cam_check_error_sensor_type(int csiphy_num);
+#endif
 #endif /* _CAM_COMMON_UTIL_H_ */

@@ -106,13 +106,13 @@ struct cam_sensor_dev_res_info {
  * @bob_pwm_switch: Boolean flag to switch into PWM mode for BoB regulator
  * @last_flush_req: Last request to flush
  * @pipeline_delay: Sensor pipeline delay
+ * @modeswitch_delay: Mode switch delay
  * @sensor_name: Sensor name
  * @aon_camera_id: AON Camera ID associated with this sensor
  * @last_applied_req: Last updated request id
  * @last_applied_req: Last applied request id
  * @is_stopped_by_user: Indicate if sensor has been stopped by userland
  * @stream_off_after_eof: Indicates if sensor needs to stream off after eof
- * @hw_no_ops: To determine whether HW operations need to be disabled
  * @is_res_info_updated: Indicate if resolution info is updated
  */
 struct cam_sensor_ctrl_t {
@@ -142,14 +142,30 @@ struct cam_sensor_ctrl_t {
 	bool                           bob_pwm_switch;
 	uint32_t                       last_flush_req;
 	uint16_t                       pipeline_delay;
+	uint16_t                       modeswitch_delay;
 	char                           sensor_name[CAM_SENSOR_NAME_MAX_SIZE];
 	uint8_t                        aon_camera_id;
 	int64_t                        last_updated_req;
 	int64_t                        last_applied_req;
 	bool                           is_stopped_by_user;
 	bool                           stream_off_after_eof;
-	bool                           hw_no_ops;
 	bool                           is_res_info_updated;
+#if defined(CONFIG_CAMERA_HYPERLAPSE_300X)
+	uint32_t                       camera_shooting_mode;
+#endif
+#if defined(CONFIG_SAMSUNG_DEBUG_SENSOR_I2C)
+	bool                           is_bubble_packet;
+#endif
+#if defined(CONFIG_CAMERA_ADAPTIVE_MIPI)
+	u32 mipi_clock_index_new;
+	u32 mipi_clock_index_cur;
+	const struct cam_mipi_sensor_mode *mipi_info;
+	uint8_t sensor_mode;
+#endif
+#if defined (CONFIG_CAMERA_FRAME_CNT_DBG)
+	struct task_struct *sensor_thread;
+	bool is_thread_started;
+#endif
 };
 
 /**

@@ -16,6 +16,10 @@
 #define RT_BASE_IDX                                    2
 #define CAM_ISP_MAX_PATHS                              8
 
+#if defined(CONFIG_SAMSUNG_DEBUG_SENSOR_TIMING_REC)
+#define CAM_ISP_CSID_SOF_TIMING_REC_DEBUG_MASK (0x1000)
+#endif
+
 /**
  * enum cam_ife_csid_hw_irq_regs - Specify the top irq reg
  */
@@ -323,6 +327,17 @@ enum cam_ife_csid_reset_type {
 	CAM_IFE_CSID_RESET_MAX,
 };
 
+
+/**
+ * enum cam_ife_csid_reset_trigger - Specify the reset trigger
+ */
+enum cam_ife_csid_reset_trigger {
+	CAM_IFE_CSID_RESET_AT_INIT = 1,
+	CAM_IFE_CSID_RESET_AT_DEINIT,
+	CAM_IFE_CSID_RESET_AT_STOP,
+};
+
+
 /**
  * struct cam_ife_csid_reset_cfg-  csid reset configuration
  * @ reset_type : Global reset or path reset
@@ -330,16 +345,8 @@ enum cam_ife_csid_reset_type {
  *
  */
 struct cam_csid_reset_cfg_args {
-	enum cam_ife_csid_reset_type   reset_type;
-	struct cam_isp_resource_node  *node_res;
-};
-
-/**
- * struct cam_csid_reset_out_of_sync_count_args
- * @res_node :   resource need to be reset
- *
- */
-struct cam_csid_reset_out_of_sync_count_args {
+	enum cam_ife_csid_reset_type    reset_type;
+	enum cam_ife_csid_reset_trigger reset_trigger;
 	struct cam_isp_resource_node  *node_res;
 };
 
@@ -509,6 +516,9 @@ struct cam_ife_csid_debug_cfg_args {
 	uint32_t                          csid_rx_capture_debug;
 	uint32_t                          csid_testbus_debug;
 	bool                              rx_capture_debug_set;
+#if defined(CONFIG_SAMSUNG_DEBUG_SENSOR_FPS)
+	uint64_t                          csid_dbg_fps;
+#endif
 };
 
 /*

@@ -25,6 +25,11 @@ module_param(debug_priority, uint, 0644);
 uint debug_drv;
 module_param(debug_drv, uint, 0644);
 
+#if defined(CONFIG_SAMSUNG_DEBUG_SENSOR_I2C)
+char debug_sensor_name[20];
+module_param_string(debug_sensor_name, debug_sensor_name, sizeof(debug_sensor_name), 0644);
+#endif
+
 struct camera_debug_settings cam_debug;
 
 struct dentry *cam_debugfs_root;

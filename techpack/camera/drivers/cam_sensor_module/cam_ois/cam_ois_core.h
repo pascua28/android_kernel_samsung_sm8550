@@ -33,5 +33,11 @@ void cam_ois_shutdown(struct cam_ois_ctrl_t *o_ctrl);
 
 struct completion *cam_ois_get_i3c_completion(uint32_t index);
 
+#if defined(CONFIG_SAMSUNG_OIS_MCU_STM32)
+int cam_ois_power_up(struct cam_ois_ctrl_t *o_ctrl);
+int cam_ois_power_down(struct cam_ois_ctrl_t *o_ctrl);
+int cam_ois_apply_settings(struct cam_ois_ctrl_t *o_ctrl,
+	struct i2c_settings_array *i2c_set);
+#endif
 #endif
 /* _CAM_OIS_CORE_H_ */

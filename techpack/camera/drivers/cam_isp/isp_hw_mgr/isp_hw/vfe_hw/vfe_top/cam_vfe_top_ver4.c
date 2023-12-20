@@ -40,6 +40,9 @@ struct cam_vfe_top_ver4_priv {
 	uint8_t                                  log_buf[CAM_VFE_LEN_LOG_BUF];
 	uint32_t                                 sof_cnt;
 	struct cam_vfe_top_ver4_perf_counter_cfg perf_counters[CAM_VFE_PERF_COUNTER_MAX];
+#if defined(CONFIG_SAMSUNG_DEBUG_SENSOR_FPS)
+	uint32_t                                 vfe_dbg_fps;
+#endif
 };
 
 enum cam_vfe_top_ver4_fsm_state {
@@ -500,8 +503,9 @@ int cam_vfe_top_ver4_dump_timestamps(
 	ktime_get_boottime_ts64(&ts);
 
 	CAM_INFO(CAM_ISP,
-		"VFE[%u] current monotonic time stamp seconds %lld:%lld",
-		vfe_priv->hw_intf->hw_idx, ts.tv_sec, ts.tv_nsec);
+		"VFE[%u] res: %u current_ts: %lld:%lld epoch_factor: %u%%",
+		vfe_priv->hw_intf->hw_idx, res_id, ts.tv_sec, ts.tv_nsec,
+		vfe_priv->epoch_factor);
 
 	CAM_INFO(CAM_ISP,
 		"CAMIF Error time %lld:%lld SOF %lld:%lld EPOCH %lld:%lld EOF %lld:%lld",
@@ -1088,6 +1092,9 @@ int cam_vfe_top_ver4_process_cmd(void *device_priv, uint32_t cmd_type,
 			for (i = 0; i < max_counters; i++)
 				top_priv->perf_counters[i].perf_counter_val =
 					debug_cfg->vfe_perf_counter_val[i];
+#if defined(CONFIG_SAMSUNG_DEBUG_SENSOR_FPS)
+		top_priv->vfe_dbg_fps = debug_cfg->vfe_dbg_fps;
+#endif
 	}
 		break;
 	default:
@@ -1298,6 +1305,71 @@ static int cam_vfe_handle_eof(struct cam_vfe_mux_ver4_data *vfe_priv,
 	return 0;
 }
 
+
+#if defined(CONFIG_SAMSUNG_DEBUG_SENSOR_FPS)
+#include <linux/ktime.h>
+static ktime_t sof_ts[CAM_SFE_HW_NUM_MAX] = { 0, },
+sof_curr_ts[CAM_SFE_HW_NUM_MAX] = { 0, },
+eof_ts[CAM_SFE_HW_NUM_MAX] = { 0, },
+epoch_ts[CAM_SFE_HW_NUM_MAX] = { 0, };
+
+static void	cam_vfe_print_debug_sensor_timing(
+	struct cam_vfe_mux_ver4_data* vfe_priv)
+{
+	uint32_t dbg_hw_idx[2] = { 0, }, 
+		curr_idx = 0;
+	bool is_vfe_idx_matching_good = false;
+
+	if ((vfe_priv == NULL) || (vfe_priv->top_priv == NULL) ||
+		(vfe_priv->top_priv->vfe_dbg_fps == 100))// no config
+		return;
+
+	curr_idx = vfe_priv->hw_intf->hw_idx;
+
+	if (vfe_priv->top_priv->vfe_dbg_fps / 100 >= 2) {
+		dbg_hw_idx[0] = (vfe_priv->top_priv->vfe_dbg_fps >> 4) & 0xf;
+		dbg_hw_idx[0] = dbg_hw_idx[0] > (CAM_SFE_HW_NUM_MAX -1) ?
+			(CAM_SFE_HW_NUM_MAX - 1) : dbg_hw_idx[0];
+		dbg_hw_idx[1] = (vfe_priv->top_priv->vfe_dbg_fps & 0xf);
+		dbg_hw_idx[1] = dbg_hw_idx[1] > (CAM_SFE_HW_NUM_MAX - 1) ?
+			(CAM_SFE_HW_NUM_MAX - 1) : dbg_hw_idx[1];
+
+		is_vfe_idx_matching_good = (curr_idx == dbg_hw_idx[0]) ||
+			(curr_idx == dbg_hw_idx[1]);
+	}
+	else {
+		dbg_hw_idx[0] = (vfe_priv->top_priv->vfe_dbg_fps & 0xf);
+		dbg_hw_idx[0] = dbg_hw_idx[0] > (CAM_SFE_HW_NUM_MAX - 1) ?
+			(CAM_SFE_HW_NUM_MAX - 1) : dbg_hw_idx[0];
+		is_vfe_idx_matching_good = (curr_idx == dbg_hw_idx[0]);
+	}
+
+	if (is_vfe_idx_matching_good) // vfe idx
+	{
+		if (vfe_priv->fsm_state == VFE_TOP_VER4_FSM_SOF)	 //	SOF
+		{
+			sof_curr_ts[curr_idx] = ktime_get();
+			CAM_INFO(CAM_ISP, "[%d] sof-sof %d us", curr_idx,
+				ktime_to_us(ktime_sub(sof_curr_ts[curr_idx], sof_ts[curr_idx])));
+			sof_ts[curr_idx] = sof_curr_ts[curr_idx];
+		}
+		else if (vfe_priv->fsm_state == VFE_TOP_VER4_FSM_EOF)
+		{
+			eof_ts[curr_idx] = ktime_get();
+			CAM_INFO(CAM_ISP, "[%d] vvalid %d us", curr_idx,
+				ktime_to_us(ktime_sub(eof_ts[curr_idx], sof_ts[curr_idx])));
+		}
+		else if (vfe_priv->fsm_state == VFE_TOP_VER4_FSM_EPOCH)
+		{
+			epoch_ts[curr_idx] = ktime_get();
+			CAM_INFO(CAM_ISP, "[%d] sof-epoch %d us", curr_idx,
+				ktime_to_us(ktime_sub(epoch_ts[curr_idx], sof_ts[curr_idx])));
+		}
+	}
+}
+#endif
+
+
 static int __cam_vfe_handle_frame_timing_irqs(struct cam_isp_resource_node *vfe_res, bool event,
 	enum cam_isp_hw_event_type event_type, cam_vfe_handle_frame_irq_t handle_irq_fn,
 	struct cam_vfe_top_irq_evt_payload *payload, struct cam_isp_hw_event_info *evt_info)
@@ -1309,6 +1381,9 @@ static int __cam_vfe_handle_frame_timing_irqs(struct cam_isp_resource_node *vfe_
 			cam_isp_hw_evt_type_to_string(event_type));
 	} else {
 		handle_irq_fn(vfe_priv, payload, evt_info);
+#if defined(CONFIG_SAMSUNG_DEBUG_SENSOR_FPS)
+		cam_vfe_print_debug_sensor_timing(vfe_priv);
+#endif
 		if (vfe_priv->event_cb)
 			vfe_priv->event_cb(vfe_priv->priv, event_type, evt_info);
 	}

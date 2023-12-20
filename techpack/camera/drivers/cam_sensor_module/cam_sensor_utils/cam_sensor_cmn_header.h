@@ -21,7 +21,7 @@
 #include <media/cam_req_mgr.h>
 
 #define MAX_POWER_CONFIG                       12
-#define MAX_PER_FRAME_ARRAY                    32
+#define MAX_PER_FRAME_ARRAY                    64
 #define BATCH_SIZE_MAX                         16
 #define CAM_I3C_DEV_PROBE_TIMEOUT_MS           10
 #define CAM_I3C_DEV_PROBE_TIMEOUT_US          (CAM_I3C_DEV_PROBE_TIMEOUT_MS * 1000)
@@ -40,12 +40,20 @@
 
 #define CAM_PKT_NOP_OPCODE 127
 
+#if defined(CONFIG_USE_CAMERA_HW_BIG_DATA)
+int msm_is_sec_get_sensor_position(uint32_t *sensor_position);
+int msm_is_sec_get_sensor_comp_mode(uint32_t **sensor_comp_mode);
+#endif
+
 enum camera_flash_opcode {
 	CAMERA_SENSOR_FLASH_OP_INVALID,
 	CAMERA_SENSOR_FLASH_OP_OFF,
 	CAMERA_SENSOR_FLASH_OP_FIRELOW,
 	CAMERA_SENSOR_FLASH_OP_FIREHIGH,
 	CAMERA_SENSOR_FLASH_OP_FIREDURATION,
+#if IS_REACHABLE(CONFIG_LEDS_S2MPB02) || defined(CONFIG_LEDS_KTD2692) || defined(CONFIG_SAMSUNG_PMIC_FLASH)
+	CAMERA_SENSOR_FLASH_OP_FIRETORCH,
+#endif
 	CAMERA_SENSOR_FLASH_OP_MAX,
 };
 
@@ -100,17 +108,21 @@ enum sensor_sub_module {
 enum msm_camera_power_seq_type {
 	SENSOR_MCLK,
 	SENSOR_VANA,
+	SENSOR_VANA1,
 	SENSOR_VDIG,
 	SENSOR_VIO,
 	SENSOR_VAF,
 	SENSOR_VAF_PWDM,
 	SENSOR_CUSTOM_REG1,
 	SENSOR_CUSTOM_REG2,
+	SENSOR_CUSTOM_REG3,
+	SENSOR_CUSTOM_REG4,
 	SENSOR_RESET,
 	SENSOR_STANDBY,
 	SENSOR_CUSTOM_GPIO1,
 	SENSOR_CUSTOM_GPIO2,
-	SENSOR_VANA1,
+	SENSOR_CUSTOM_GPIO3,
+	SENSOR_CUSTOM_GPIO4,
 	SENSOR_SEQ_TYPE_MAX,
 };
 
@@ -274,6 +286,26 @@ struct msm_sensor_init_params {
 	unsigned int sensor_mount_angle;
 };
 
+enum msm_sensor_sec_camera_id_t {
+	SEC_DEFAULT_SENSOR				= 0,
+	SEC_WIDE_SENSOR 				= SEC_DEFAULT_SENSOR,
+	SEC_FRONT_SENSOR				= 1,
+	SEC_ULTRA_WIDE_SENSOR			= 2,
+	SEC_TELE_SENSOR 				= 3,
+	SEC_REAR_TOF_SENSOR 			= 4,
+	SEC_FRONT_TOF_SENSOR			= 5,
+	SEC_TELE2_SENSOR				= 6,
+	SEC_RESERVE2_SENSOR 			= 7,
+	SEC_FRONT_AUX1_SENSOR			= 8,
+	SEC_RESERVE3_SENSOR 			= 9,
+	SEC_RESERVE4_SENSOR 			= 10,
+	SEC_FRONT_TOP_SENSOR			= 11,
+	SEC_FRONT_FULL_SENSOR			= 12,
+	SEC_FRONT_TOP_FULL_SENSOR		= 13,
+	SEC_TELE_BINNING_SENSOR 		= 14,
+	SEC_SENSOR_ID_MAX
+};
+
 enum msm_sensor_camera_id_t {
 	CAMERA_0,
 	CAMERA_1,
@@ -291,6 +323,7 @@ enum msm_sensor_camera_id_t {
 	CAMERA_13,
 	CAMERA_14,
 	CAMERA_15,
+	CAMERA_16,
 	MAX_CAMERAS,
 };
 
@@ -333,9 +366,12 @@ enum msm_camera_vreg_name_t {
 	CAM_VDIG,
 	CAM_VIO,
 	CAM_VANA,
+	CAM_VANA1,
 	CAM_VAF,
 	CAM_V_CUSTOM1,
 	CAM_V_CUSTOM2,
+	CAM_V_CUSTOM3,
+	CAM_V_CUSTOM4,
 	CAM_VREG_MAX,
 };
 

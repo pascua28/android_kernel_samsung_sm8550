@@ -27,6 +27,27 @@ static struct cam_common_err_inject_info g_err_inject_info;
 static uint timeout_multiplier = 1;
 module_param(timeout_multiplier, uint, 0644);
 
+#if defined(CONFIG_SAMSUNG_DEBUG_HW_INFO)
+void cam_check_error_sensor_type(int csiphy_num) {
+	if (csiphy_num == WIDE_CAM)
+		CAM_INFO(CAM_ISP, "[MIPI_DBG] WIDE_CAM mipi error!! (csiphy %d)", csiphy_num);
+	else if (csiphy_num == UW_CAM)
+		CAM_INFO(CAM_ISP, "[MIPI_DBG] UW_CAM mipi error!! (csiphy %d)", csiphy_num);
+	else if (csiphy_num == TELE1_CAM)
+		CAM_INFO(CAM_ISP, "[MIPI_DBG] TELE1_CAM mipi error!! (csiphy %d)", csiphy_num);
+	else if (csiphy_num == TELE2_CAM)
+		CAM_INFO(CAM_ISP, "[MIPI_DBG] TELE2_CAM mipi error!! (csiphy %d)", csiphy_num);
+	else if (csiphy_num == FRONT_CAM)
+		CAM_INFO(CAM_ISP, "[MIPI_DBG] FRONT_CAM mipi error!! (csiphy %d)", csiphy_num);
+	else if (csiphy_num == COVER_CAM)
+                CAM_INFO(CAM_ISP, "[MIPI_DBG] COVER_CAM mipi error!! (csiphy %d)", csiphy_num);
+	else if (csiphy_num == FRONT_AUX)
+                CAM_INFO(CAM_ISP, "[MIPI_DBG] COVER_CAM mipi error!! (csiphy %d)", csiphy_num);
+	else
+		CAM_INFO(CAM_ISP, "[MIPI_DBG] Unknown camera mipi error!! (csiphy %d)", csiphy_num);
+}
+#endif
+
 int cam_common_util_get_string_index(const char **strings,
 	uint32_t num_strings, const char *matching_string, uint32_t *index)
 {

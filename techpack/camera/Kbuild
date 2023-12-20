@@ -50,6 +50,49 @@ ifeq ($(CONFIG_ARCH_PARROT), y)
 include $(CAMERA_KERNEL_ROOT)/config/parrot.mk
 endif
 
+#sensor header path for adaptive mipi
+CAMERA_KERNEL_PATH = $(srctree)/../../vendor/qcom/opensource/camera-kernel
+
+ifeq ($(CONFIG_SEC_DM1Q_PROJECT), y)
+SRC_WIDE_FILES = $(CAMERA_KERNEL_PATH)/drivers/cam_sensor_module/cam_sensor/adaptive_mipi/cam_sensor_adaptive_mipi_s5kgn3.h
+SRC_UW_FILES = $(CAMERA_KERNEL_PATH)/drivers/cam_sensor_module/cam_sensor/adaptive_mipi/cam_sensor_adaptive_mipi_imx564.h
+SRC_TELE_FILES = $(CAMERA_KERNEL_PATH)/drivers/cam_sensor_module/cam_sensor/adaptive_mipi/cam_sensor_adaptive_mipi_s5k3k1.h
+SRC_FRONT_FILES = $(CAMERA_KERNEL_PATH)/drivers/cam_sensor_module/cam_sensor/adaptive_mipi/cam_sensor_adaptive_mipi_s5k3lu.h
+else ifeq ($(CONFIG_SEC_DM2Q_PROJECT), y)
+SRC_WIDE_FILES = $(CAMERA_KERNEL_PATH)/drivers/cam_sensor_module/cam_sensor/adaptive_mipi/cam_sensor_adaptive_mipi_s5kgn3.h
+SRC_UW_FILES = $(CAMERA_KERNEL_PATH)/drivers/cam_sensor_module/cam_sensor/adaptive_mipi/cam_sensor_adaptive_mipi_imx564.h
+SRC_TELE_FILES = $(CAMERA_KERNEL_PATH)/drivers/cam_sensor_module/cam_sensor/adaptive_mipi/cam_sensor_adaptive_mipi_s5k3k1.h
+SRC_FRONT_FILES = $(CAMERA_KERNEL_PATH)/drivers/cam_sensor_module/cam_sensor/adaptive_mipi/cam_sensor_adaptive_mipi_s5k3lu.h
+else ifeq ($(CONFIG_SEC_DM3Q_PROJECT), y)
+SRC_WIDE_FILES = $(CAMERA_KERNEL_PATH)/drivers/cam_sensor_module/cam_sensor/adaptive_mipi/cam_sensor_adaptive_mipi_s5khp2.h
+SRC_UW_FILES = $(CAMERA_KERNEL_PATH)/drivers/cam_sensor_module/cam_sensor/adaptive_mipi/cam_sensor_adaptive_mipi_imx564.h
+SRC_TELE_FILES = $(CAMERA_KERNEL_PATH)/drivers/cam_sensor_module/cam_sensor/adaptive_mipi/cam_sensor_adaptive_mipi_imx754.h
+SRC_FRONT_FILES = $(CAMERA_KERNEL_PATH)/drivers/cam_sensor_module/cam_sensor/adaptive_mipi/cam_sensor_adaptive_mipi_s5k3lu.h
+else ifeq ($(CONFIG_SEC_Q5Q_PROJECT), y)
+SRC_WIDE_FILES = $(CAMERA_KERNEL_PATH)/drivers/cam_sensor_module/cam_sensor/adaptive_mipi/cam_sensor_adaptive_mipi_s5kgn3.h
+SRC_UW_FILES = $(CAMERA_KERNEL_PATH)/drivers/cam_sensor_module/cam_sensor/adaptive_mipi/cam_sensor_adaptive_mipi_imx258.h
+SRC_TELE_FILES = $(CAMERA_KERNEL_PATH)/drivers/cam_sensor_module/cam_sensor/adaptive_mipi/cam_sensor_adaptive_mipi_s5k3k1.h
+SRC_FRONT_FILES = $(CAMERA_KERNEL_PATH)/drivers/cam_sensor_module/cam_sensor/adaptive_mipi/cam_sensor_adaptive_mipi_imx374.h
+SRC_FRONT_TOP_FILES = $(CAMERA_KERNEL_PATH)/drivers/cam_sensor_module/cam_sensor/adaptive_mipi/cam_sensor_adaptive_mipi_imx471.h
+else ifeq ($(CONFIG_SEC_B5Q_PROJECT), y)
+SRC_WIDE_FILES = $(CAMERA_KERNEL_PATH)/drivers/cam_sensor_module/cam_sensor/adaptive_mipi/cam_sensor_adaptive_mipi_s5k2ld.h
+SRC_UW_FILES = $(CAMERA_KERNEL_PATH)/drivers/cam_sensor_module/cam_sensor/adaptive_mipi/cam_sensor_adaptive_mipi_imx258_b5.h
+SRC_FRONT_FILES = $(CAMERA_KERNEL_PATH)/drivers/cam_sensor_module/cam_sensor/adaptive_mipi/cam_sensor_adaptive_mipi_s5k3j1.h
+endif
+
+DST_WIDE_FILES = $(CAMERA_KERNEL_PATH)/drivers/cam_sensor_module/cam_sensor/cam_sensor_adaptive_mipi_wide.h
+DST_UW_FILES = $(CAMERA_KERNEL_PATH)/drivers/cam_sensor_module/cam_sensor/cam_sensor_adaptive_mipi_uw.h
+DST_TELE_FILES = $(CAMERA_KERNEL_PATH)/drivers/cam_sensor_module/cam_sensor/cam_sensor_adaptive_mipi_tele.h
+DST_FRONT_FILES = $(CAMERA_KERNEL_PATH)/drivers/cam_sensor_module/cam_sensor/cam_sensor_adaptive_mipi_front.h
+DST_FRONT_TOP_FILES = $(CAMERA_KERNEL_PATH)/drivers/cam_sensor_module/cam_sensor/cam_sensor_adaptive_mipi_front_top.h
+
+#Copy sensor header for adaptive mipi
+$(info camera_adaptive_mipi="$(shell cp -f $(SRC_WIDE_FILES) $(DST_WIDE_FILES))")
+$(info camera_adaptive_mipi="$(shell cp -f $(SRC_UW_FILES) $(DST_UW_FILES))")
+$(info camera_adaptive_mipi="$(shell cp -f $(SRC_TELE_FILES) $(DST_TELE_FILES))")
+$(info camera_adaptive_mipi="$(shell cp -f $(SRC_FRONT_FILES) $(DST_FRONT_FILES))")
+$(info camera_adaptive_mipi="$(shell cp -f $(SRC_FRONT_TOP_FILES) $(DST_FRONT_TOP_FILES))")
+
 # List of all camera-kernel headers
 cam_include_dirs := $(shell dirname `find $(CAMERA_KERNEL_ROOT) -name '*.h'` | uniq)
 
@@ -81,6 +124,7 @@ camera-y := \
 	drivers/cam_utils/cam_debug_util.o \
 	drivers/cam_utils/cam_trace.o \
 	drivers/cam_utils/cam_common_util.o \
+	drivers/cam_utils/cam_notifier.o \
 	drivers/cam_utils/cam_compat.o \
 	drivers/cam_core/cam_context.o \
 	drivers/cam_core/cam_context_utils.o \
@@ -229,6 +273,7 @@ camera-$(CONFIG_SPECTRA_SENSOR) += \
 	drivers/cam_sensor_module/cam_sensor/cam_sensor_dev.o \
 	drivers/cam_sensor_module/cam_sensor/cam_sensor_core.o \
 	drivers/cam_sensor_module/cam_sensor/cam_sensor_soc.o \
+	drivers/cam_sensor_module/cam_sensor/cam_sensor_mipi.o \
 	drivers/cam_sensor_module/cam_sensor_io/cam_sensor_io.o \
 	drivers/cam_sensor_module/cam_sensor_io/cam_sensor_cci_i2c.o \
 	drivers/cam_sensor_module/cam_sensor_io/cam_sensor_qup_i2c.o \
@@ -285,6 +330,35 @@ camera-$(CONFIG_SPECTRA_TFE) += \
 	drivers/cam_isp/isp_hw_mgr/isp_hw/tfe_csid_hw/cam_tfe_csid_core.o \
 	drivers/cam_isp/isp_hw_mgr/isp_hw/tfe_csid_hw/cam_tfe_csid.o \
 	drivers/cam_isp/isp_hw_mgr/cam_tfe_hw_mgr.o
+
+camera-$(CONFIG_SAMSUNG_OIS_MCU_STM32) += \
+	drivers/cam_sensor_module/cam_ois/cam_ois_mcu_stm32g.o \
+	drivers/cam_sensor_module/cam_ois/cam_ois_thread.o \
+	drivers/cam_sensor_module/cam_sensor_utils/cam_sysfs_ois_mcu.o
+
+camera-$(CONFIG_CAMERA_SYSFS_V2) += \
+	drivers/cam_sensor_module/cam_actuator/cam_sec_actuator_core.o \
+	drivers/cam_sensor_module/cam_eeprom/cam_sec_eeprom_core.o  \
+	drivers/cam_sensor_module/cam_sensor_utils/cam_sysfs_init.o \
+	drivers/cam_sensor_module/cam_sensor_utils/cam_sysfs_hw_bigdata.o \
+	drivers/cam_sensor_module/cam_sensor_utils/cam_hw_bigdata.o \
+	drivers/cam_sensor_module/cam_sensor_utils/cam_clock_data_recovery.o
+
+camera-$(CONFIG_CAMERA_FRAME_CNT_DBG) += \
+	drivers/cam_sensor_module/cam_sensor/cam_sensor_thread.o
+	
+camera-$(CONFIG_SEC_KUNIT) += \
+	drivers/cam_sensor_module/cam_sensor_utils/kunit_test/cam_hw_bigdata_test.o \
+	drivers/cam_sensor_module/cam_sensor_utils/kunit_test/cam_sec_eeprom_core_test.o \
+	drivers/cam_sensor_module/cam_sensor_utils/kunit_test/cam_clock_data_recovery_test.o \
+	drivers/cam_sensor_module/cam_sensor_utils/kunit_test/cam_sensor_mipi_test.o \
+	drivers/cam_sensor_module/cam_sensor_utils/kunit_test/cam_sysfs_hw_bigdata_test.o \
+	drivers/kunit_test/camera_kunit_main.o
+
+GCOV_PROFILE_cam_hw_bigdata.o := $(CONFIG_SEC_KUNIT)
+GCOV_PROFILE_cam_sec_eeprom_core.o := $(CONFIG_SEC_KUNIT)
+GCOV_PROFILE_cam_clock_data_recovery.o := $(CONFIG_SEC_KUNIT)
+GCOV_PROFILE_cam_sensor_mipi.o := $(CONFIG_SEC_KUNIT)
 
 camera-y += drivers/camera_main.o
 

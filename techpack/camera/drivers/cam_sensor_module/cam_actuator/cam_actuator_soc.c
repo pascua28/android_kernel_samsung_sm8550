@@ -23,6 +23,7 @@ int32_t cam_actuator_parse_dt(struct cam_actuator_ctrl_t *a_ctrl,
 	struct cam_sensor_power_ctrl_t  *power_info = &soc_private->power_info;
 	struct device_node              *of_node = NULL;
 	struct device_node              *of_parent = NULL;
+	uint32_t                        temp = 0;
 
 	/* Initialize mutex */
 	mutex_init(&(a_ctrl->actuator_mutex));
@@ -65,16 +66,38 @@ int32_t cam_actuator_parse_dt(struct cam_actuator_ctrl_t *a_ctrl,
 		CAM_DBG(CAM_ACTUATOR, "cci-device %d", a_ctrl->cci_num);
 	}
 
+	rc = of_property_read_u32(of_node, "slave-addr", &temp);
+	soc_private->i2c_info.slave_addr = temp;
+	if (rc < 0) {
+		CAM_DBG(CAM_ACTUATOR, "No slave-addr found");
+		rc = 0;
+	}
+
+#if defined(CONFIG_SAMSUNG_OIS_MCU_STM32)
+	if (of_property_read_bool(of_node, "use-mcu")) {
+		CAM_INFO(CAM_ACTUATOR,
+			"actuator%u with MCU", soc_info->index);
+		a_ctrl->use_mcu = true;	
+	}
+#endif
+
 	/* Initialize regulators to default parameters */
 	for (i = 0; i < soc_info->num_rgltr; i++) {
 		soc_info->rgltr[i] = devm_regulator_get(soc_info->dev,
 					soc_info->rgltr_name[i]);
 		if (IS_ERR_OR_NULL(soc_info->rgltr[i])) {
+#if defined(CONFIG_SEC_Q5Q_PROJECT)
+			CAM_WARN(CAM_ACTUATOR,"get failed for regulator %s %d",
+				soc_info->rgltr_name[i], rc);
+			soc_info->rgltr[i] = NULL;		
+#else
+
 			rc = PTR_ERR(soc_info->rgltr[i]);
 			rc = rc ? rc : -EINVAL;
 			CAM_ERR(CAM_ACTUATOR, "get failed for regulator %s %d",
 				 soc_info->rgltr_name[i], rc);
 			return rc;
+#endif
 		}
 		CAM_DBG(CAM_ACTUATOR, "get for regulator %s",
 			soc_info->rgltr_name[i]);

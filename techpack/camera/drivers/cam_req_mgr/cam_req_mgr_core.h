@@ -77,14 +77,15 @@ enum crm_workq_task_type {
 
 /**
  * struct crm_task_payload
- * @type           : to identify which type of task is present
- * @u              : union of payload of all types of tasks supported
- * @sched_req      : contains info of  incoming reqest from CSL to CRM
- * @flush_info     : contains info of cancelled reqest
- * @dev_req        : contains tracking info of available req id at device
- * @send_req       : contains info of apply settings to be sent to devs in link
- * @notify_trigger : contains notification from IFE to CRM about trigger
- * @notify_err     : contains error info happened while processing request
+ * @type            : to identify which type of task is present
+ * @u               : union of payload of all types of tasks supported
+ * @sched_req       : contains info of  incoming reqest from CSL to CRM
+ * @flush_info      : contains info of cancelled reqest
+ * @dev_req         : contains tracking info of available req id at device
+ * @send_req        : contains info of apply settings to be sent to devs in link
+ * @notify_trigger  : contains notification from IFE to CRM about trigger
+ * @notify_err      : contains error info happened while processing request
+ * @notify_evt_drop : contains info on dropped shutter event
  * -
  */
 struct crm_task_payload {
@@ -96,6 +97,7 @@ struct crm_task_payload {
 		struct cam_req_mgr_send_request         send_req;
 		struct cam_req_mgr_trigger_notify       notify_trigger;
 		struct cam_req_mgr_error_notify         notify_err;
+		struct cam_req_mgr_notify_event_drop    notify_evt_drop;
 	} u;
 };
 
@@ -363,6 +365,8 @@ struct cam_req_mgr_connected_device {
  * @num_devs             : num of connected devices to this link
  * @max_delay            : Max of pipeline delay of all connected devs
  * @min_delay            : Min of pipeline delay of all connected devs
+ * @max_delay            : Max of modeswitch delay of all connected devs
+ * @min_delay            : Min of modeswitch delay of all connected devs
  * @workq                : Pointer to handle workq related jobs
  * @pd_mask              : each set bit indicates the device with pd equal to
  *                          bit position is available.
@@ -410,6 +414,7 @@ struct cam_req_mgr_connected_device {
  * @last_sof_trigger_jiffies : Record the jiffies of last sof trigger jiffies
  * @wq_congestion        : Indicates if WQ congestion is detected or not
  * @try_for_internal_recovery : If the link stalls try for RT internal recovery
+ * @dropped_evt_notified : Indicates if a link has already handled event drop
  * @properties_mask      : Indicates if current link enables some special properties
  * @cont_empty_slots     : Continuous empty slots
  */
@@ -418,6 +423,8 @@ struct cam_req_mgr_core_link {
 	int32_t                              num_devs;
 	enum cam_pipeline_delay              max_delay;
 	enum cam_pipeline_delay              min_delay;
+	enum cam_modeswitch_delay            max_mswitch_delay;
+	enum cam_modeswitch_delay            min_mswitch_delay;
 	struct cam_req_mgr_core_workq       *workq;
 	int32_t                              pd_mask;
 	struct cam_req_mgr_connected_device *l_dev;
@@ -451,6 +458,7 @@ struct cam_req_mgr_core_link {
 	uint64_t                             last_sof_trigger_jiffies;
 	bool                                 wq_congestion;
 	bool                                 try_for_internal_recovery;
+	bool                                 dropped_evt_notified;
 	uint32_t                             properties_mask;
 	uint32_t                             cont_empty_slots;
 };
@@ -706,5 +714,13 @@ int cam_req_mgr_dump_request(struct cam_dump_req_cmd *dump_req);
  * @properties: Link properties
  */
 int cam_req_mgr_link_properties(struct cam_req_mgr_link_properties *properties);
+
+/**
+ * cam_req_mgr_notify_event_drop()
+ * @brief:   Notifies userspace if a v4l2 valid shutter event is dropped
+ * @link_hdl: Link hdl
+ * @request_id : Request ID
+ */
+int cam_req_mgr_notify_event_drop(int32_t link_hdl, uint64_t request_id);
 
 #endif
