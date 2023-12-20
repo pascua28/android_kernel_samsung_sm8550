@@ -916,15 +916,15 @@ static int adjust_bw_freqs(void)
 {
 	struct msm_cvp_core *core;
 	struct iris_hfi_device *hdev;
-	struct bus_info *bus = NULL;
+	struct bus_info *bus;
 	struct clock_set *clocks;
 	struct clock_info *cl;
 	struct allowed_clock_rates_table *tbl = NULL;
 	unsigned int tbl_size;
-	unsigned int cvp_min_rate, cvp_max_rate, max_bw = 0, min_bw = 0;
+	unsigned int cvp_min_rate, cvp_max_rate, max_bw, min_bw;
 	struct cvp_power_level rt_pwr = {0}, nrt_pwr = {0};
 	unsigned long tmp, core_sum, op_core_sum, bw_sum;
-	int i, rc = 0, bus_count = 0;
+	int i, rc = 0;
 	unsigned long ctrl_freq;
 
 	core = list_first_entry(&cvp_driver->cores, struct msm_cvp_core, list);
@@ -936,18 +936,9 @@ static int adjust_bw_freqs(void)
 	tbl_size = core->resources.allowed_clks_tbl_size;
 	cvp_min_rate = tbl[0].clock_rate;
 	cvp_max_rate = tbl[tbl_size - 1].clock_rate;
-
-	for (bus_count = 0; bus_count < core->resources.bus_set.count; bus_count++) {
-		if (!strcmp(core->resources.bus_set.bus_tbl[bus_count].name, "cvp-ddr")) {
-			bus = &core->resources.bus_set.bus_tbl[bus_count];
-			max_bw = bus->range[1];
-			min_bw = max_bw/10;
-		}
-	}
-	if (!bus) {
-		dprintk(CVP_ERR, "bus node is NULL for cvp-ddr\n");
-		return -EINVAL;
-	}
+	bus = &core->resources.bus_set.bus_tbl[1];
+	max_bw = bus->range[1];
+	min_bw = max_bw/10;
 
 	aggregate_power_update(core, &nrt_pwr, &rt_pwr, cvp_max_rate);
 	dprintk(CVP_PROF, "PwrUpdate nrt %u %u rt %u %u\n",
@@ -1821,7 +1812,7 @@ int msm_cvp_session_deinit(struct msm_cvp_inst *inst)
 		inst, hash32_ptr(inst->session));
 
 	session = (struct cvp_hal_session *)inst->session;
-	if (!session || session == (void *)0xdeadbeef)
+	if (!session)
 		return rc;
 
 	rc = msm_cvp_comm_try_state(inst, MSM_CVP_CLOSE_DONE);

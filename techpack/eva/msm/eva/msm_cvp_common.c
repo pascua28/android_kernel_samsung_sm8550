@@ -50,15 +50,18 @@ static void dump_hfi_queue(struct iris_hfi_device *device)
 			dprintk(CVP_ERR, "HFI queue not init, fail to dump\n");
 			return;
 		}
-		dprintk(CVP_ERR, "queue details: %d %d\n",
-				queue->qhdr_read_idx, queue->qhdr_write_idx);
+		dprintk(CVP_ERR, "queue details: r:w %d:%d r:t %d %d\n",
+				queue->qhdr_read_idx, queue->qhdr_write_idx,
+				queue->qhdr_rx_req, queue->qhdr_tx_req);
 		if (queue->qhdr_read_idx != queue->qhdr_write_idx) {
 			read_idx = queue->qhdr_read_idx;
 			read_ptr = (u32 *)((qinfo->q_array.align_virtual_addr) +
 				(read_idx << 2));
-			dprintk(CVP_ERR, "queue payload: %x %x %x %x\n",
-				read_ptr[0], read_ptr[1],
-				read_ptr[2], read_ptr[3]);
+			dprintk(CVP_ERR,
+				"queue payload: %x %x %x %x %x %x %x %x\n",
+				read_ptr[0], read_ptr[1], read_ptr[2],
+				read_ptr[3], read_ptr[4], read_ptr[5],
+				read_ptr[6], read_ptr[7]);
 		}
 
 	}
@@ -673,7 +676,7 @@ void msm_cvp_comm_session_clean(struct msm_cvp_inst *inst)
 		dprintk(CVP_ERR, "%s invalid params\n", __func__);
 		return;
 	}
-	if (!inst->session || inst->session == (void *)0xdeadbeef) {
+	if (!inst->session) {
 		dprintk(CVP_SESS, "%s: inst %pK session already cleaned\n",
 			__func__, inst);
 		return;
@@ -1394,7 +1397,7 @@ int msm_cvp_comm_kill_session(struct msm_cvp_inst *inst)
 	if (!inst || !inst->core || !inst->core->device) {
 		dprintk(CVP_ERR, "%s: invalid input parameters\n", __func__);
 		return -EINVAL;
-	} else if (!inst->session || inst->session == (void *)0xdeadbeef) {
+	} else if (!inst->session) {
 		dprintk(CVP_ERR, "%s: no session to kill for inst %pK\n",
 			__func__, inst);
 		return 0;

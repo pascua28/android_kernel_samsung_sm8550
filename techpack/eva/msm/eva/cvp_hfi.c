@@ -2207,7 +2207,7 @@ static int iris_hfi_session_clean(void *session)
 	struct cvp_hal_session *sess_close;
 	struct iris_hfi_device *device;
 
-	if (!session || session == (void *)0xdeadbeef) {
+	if (!session) {
 		dprintk(CVP_ERR, "Invalid Params %s\n", __func__);
 		return -EINVAL;
 	}
@@ -2400,7 +2400,7 @@ static int iris_hfi_session_release_buffers(void *sess)
 	struct cvp_hal_session *session = sess;
 	struct iris_hfi_device *device;
 
-	if (!session || session == (void *)0xdeadbeef || !session->device) {
+	if (!session || !session->device) {
 		dprintk(CVP_ERR, "Invalid Params\n");
 		return -EINVAL;
 	}
@@ -2908,7 +2908,7 @@ static int __response_handler(struct iris_hfi_device *device)
 		return 0;
 	}
 
-	if (device->intr_status & CVP_WRAPPER_INTR_MASK_A2HWD_BMSK) {
+	if (device->intr_status & CVP_FATAL_INTR_BMSK) {
 		struct cvp_hfi_sfr_struct *vsfr = (struct cvp_hfi_sfr_struct *)
 			device->sfr.align_virtual_addr;
 		struct msm_cvp_cb_info info = {
@@ -3013,7 +3013,7 @@ exit:
 	return packet_count;
 }
 
-irqreturn_t iris_hfi_core_work_handler(int irq, void *data)
+static void iris_hfi_core_work_handler(struct work_struct *work)
 {
 	struct msm_cvp_core *core;
 	struct iris_hfi_device *device;
@@ -3025,7 +3025,7 @@ irqreturn_t iris_hfi_core_work_handler(int irq, void *data)
 	if (core)
 		device = core->device->hfi_device_data;
 	else
-		return IRQ_HANDLED;
+		return;
 
 	mutex_lock(&device->lock);
 
@@ -3087,13 +3087,21 @@ err_no_work:
 	if (!(intr_status & CVP_WRAPPER_INTR_STATUS_A2HWD_BMSK))
 		enable_irq(device->cvp_hal_data->irq);
 
-	return IRQ_HANDLED;
+	/*
+	 * XXX: Don't add any code beyond here.  Reacquiring locks after release
+	 * it above doesn't guarantee the atomicity that we're aiming for.
+	 */
 }
+
+static DECLARE_WORK(iris_hfi_work, iris_hfi_core_work_handler);
 
 irqreturn_t cvp_hfi_isr(int irq, void *dev)
 {
+	struct iris_hfi_device *device = dev;
+
 	disable_irq_nosync(irq);
-	return IRQ_WAKE_THREAD;
+	queue_work(device->cvp_workq, &iris_hfi_work);
+	return IRQ_HANDLED;
 }
 
 static int __handle_reset_clk(struct msm_cvp_platform_resources *res,
