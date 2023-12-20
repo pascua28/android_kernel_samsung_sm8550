@@ -1061,6 +1061,55 @@ QDF_STATUS mlme_update_tgt_he_caps_in_cfg(struct wlan_objmgr_psoc *psoc,
 enum phy_ch_width wlan_mlme_convert_vht_op_bw_to_phy_ch_width(
 						uint8_t channel_width);
 
+/**
+ * wlan_mlme_chan_stats_scan_event_cb() - process connected channel stats
+ * scan event
+ * @vdev: pointer to vdev object
+ * @event: scan event definition
+ * @arg: scan argument
+ *
+ * Return: none
+ */
+void wlan_mlme_chan_stats_scan_event_cb(struct wlan_objmgr_vdev *vdev,
+					struct scan_event *event, void *arg);
+
+/**
+ * wlan_mlme_send_ch_width_update_with_notify() - update connected VDEV
+ * channel bandwidth
+ * @psoc: pointer to psoc object
+ * @vdev: pointer to vdev object
+ * @vdev_id: vdev id
+ * @ch_width: channel width to update
+ *
+ * Return: none
+ */
+QDF_STATUS
+wlan_mlme_send_ch_width_update_with_notify(struct wlan_objmgr_psoc *psoc,
+					   struct wlan_objmgr_vdev *vdev,
+					   uint8_t vdev_id,
+					   enum phy_ch_width ch_width);
+
+/**
+ * wlan_mlme_update_bss_rate_flags() - update bss rate flag as per new channel
+ * width
+ * @psoc: pointer to psoc object
+ * @vdev_id: Vdev id
+ * @cw: channel width to update
+ * @eht_present: connected bss is eht capable or not
+ * @he_present: connected bss is he capable or not
+ * @vht_present: connected bss is vht capable or not
+ * @ht_present: connected bss is ht capable or not
+ *
+ * Return: QDF_STATUS
+ */
+QDF_STATUS wlan_mlme_update_bss_rate_flags(struct wlan_objmgr_psoc *psoc,
+					   uint8_t vdev_id,
+					   enum phy_ch_width cw,
+					   uint8_t eht_present,
+					   uint8_t he_present,
+					   uint8_t vht_present,
+					   uint8_t ht_present);
+
 #ifdef WLAN_FEATURE_11BE
 /**
  * mlme_update_tgt_eht_caps_in_cfg() - Update tgt eht cap in mlme component
@@ -2461,7 +2510,7 @@ wlan_mlme_is_standard_6ghz_conn_policy_enabled(struct wlan_objmgr_psoc *psoc,
 					       bool *value);
 
 /**
- * wlan_mlme_is_relaxed_6ghz_conn_policy_enabled() - Get the 6ghz relaxed
+ * wlan_mlme_is_relaxed_6ghz_conn_policy_enabled() - Get the 6 GHz relaxed
  *                                                   connection policy flag
  * @psoc: psoc context
  * @value: Enable/Disable value ptr.
@@ -4226,4 +4275,13 @@ wlan_mlme_is_bcn_prot_disabled_for_sap(struct wlan_objmgr_psoc *psoc);
  */
 uint8_t *
 wlan_mlme_get_src_addr_from_frame(struct element_info *frame);
+
+/**
+ * wlan_mlme_get_max_bw() - Get max supported bandwidth
+ * Extract max supported bandwidth
+ *
+ * Return: enum phy_ch_width
+ *
+ */
+enum phy_ch_width wlan_mlme_get_max_bw(void);
 #endif /* _WLAN_MLME_API_H_ */

@@ -2454,8 +2454,14 @@ sme_process_twt_resume_dialog_event(
 		struct wmi_twt_resume_dialog_complete_event_param *param)
 {
 	twt_resume_dialog_cb callback;
+#ifdef SEC_CONFIG_TWT
+	twt_del_dialog_cb twt_del_callback;
+#endif
 	QDF_STATUS qdf_status = QDF_STATUS_E_FAILURE;
 	enum QDF_OPMODE opmode;
+#ifdef SEC_CONFIG_TWT
+	struct wmi_twt_del_dialog_complete_event_param del_param = {0};
+#endif
 
 	opmode = wlan_get_opmode_from_vdev_id(mac->pdev, param->vdev_id);
 
@@ -2484,6 +2490,18 @@ sme_process_twt_resume_dialog_event(
 					mac->psoc, (struct qdf_mac_addr *)
 					param->peer_macaddr, param->dialog_id,
 					WLAN_TWT_NONE);
+#ifdef SEC_CONFIG_TWT
+		if (param->status == WMI_HOST_RESUME_TWT_STATUS_NO_ACK) {
+			del_param.vdev_id = param->vdev_id;
+			del_param.dialog_id = param->dialog_id;
+			del_param.status = WMI_HOST_DEL_TWT_STATUS_NO_ACK;
+			qdf_mem_copy(del_param.peer_macaddr,
+				     param->peer_macaddr, QDF_MAC_ADDR_SIZE);
+			twt_del_callback = mac->sme.twt_del_dialog_cb;
+			if (twt_del_callback)
+				twt_del_callback(mac->psoc, &del_param);
+		}
+#endif
 		break;
 	default:
 		sme_debug("TWT Resume is not supported on %s",

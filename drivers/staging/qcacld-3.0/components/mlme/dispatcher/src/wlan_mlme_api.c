@@ -35,6 +35,8 @@
 #include "wlan_psoc_mlme_api.h"
 #include "wlan_action_oui_main.h"
 #include "target_if.h"
+#include "wlan_vdev_mgr_tgt_if_tx_api.h"
+#include "../../core/src/wlan_cp_stats_defs.h"
 
 /* quota in milliseconds */
 #define MCC_DUTY_CYCLE 70
@@ -1183,6 +1185,35 @@ void wlan_mlme_set_usr_disable_sta_eht(struct wlan_objmgr_psoc *psoc,
 	mlme_obj->cfg.sta.usr_disable_eht = disable;
 }
 
+enum phy_ch_width wlan_mlme_get_max_bw(void)
+{
+	uint32_t max_bw = wma_get_eht_ch_width();
+
+	if (max_bw == WNI_CFG_EHT_CHANNEL_WIDTH_320MHZ)
+		return CH_WIDTH_320MHZ;
+	else if (max_bw == WNI_CFG_VHT_CHANNEL_WIDTH_160MHZ)
+		return CH_WIDTH_160MHZ;
+	else if (max_bw == WNI_CFG_VHT_CHANNEL_WIDTH_80_PLUS_80MHZ)
+		return CH_WIDTH_80P80MHZ;
+	else if (max_bw == WNI_CFG_VHT_CHANNEL_WIDTH_80MHZ)
+		return CH_WIDTH_80MHZ;
+	else
+		return CH_WIDTH_40MHZ;
+}
+#else
+enum phy_ch_width wlan_mlme_get_max_bw(void)
+{
+	uint32_t max_bw = wma_get_vht_ch_width();
+
+	if (max_bw == WNI_CFG_VHT_CHANNEL_WIDTH_160MHZ)
+		return CH_WIDTH_160MHZ;
+	else if (max_bw == WNI_CFG_VHT_CHANNEL_WIDTH_80_PLUS_80MHZ)
+		return CH_WIDTH_80P80MHZ;
+	else if (max_bw == WNI_CFG_VHT_CHANNEL_WIDTH_80MHZ)
+		return CH_WIDTH_80MHZ;
+	else
+		return CH_WIDTH_40MHZ;
+}
 #endif
 
 #ifdef WLAN_FEATURE_11BE_MLO
@@ -6605,6 +6636,318 @@ void wlan_mlme_get_feature_info(struct wlan_objmgr_psoc *psoc,
 	wlan_mlme_get_vht_enable2x2(psoc, &mlme_feature_set->enable2x2);
 }
 #endif
+
+void wlan_mlme_chan_stats_scan_event_cb(struct wlan_objmgr_vdev *vdev,
+					struct scan_event *event, void *arg)
+{
+	bool success = false;
+
+	if (!util_is_scan_completed(event, &success))
+		return;
+
+	mlme_send_scan_done_complete_cb(event->vdev_id);
+}
+
+static QDF_STATUS
+wlan_mlme_update_vdev_chwidth_with_notify(struct wlan_objmgr_psoc *psoc,
+					  struct wlan_objmgr_vdev *vdev,
+					  uint8_t vdev_id,
+					  enum phy_ch_width ch_width)
+{
+	struct vdev_mlme_obj *vdev_mlme;
+	struct vdev_set_params param = {0};
+	QDF_STATUS status;
+
+	vdev_mlme = wlan_vdev_mlme_get_cmpt_obj(vdev);
+	if (!vdev_mlme)
+		return QDF_STATUS_E_FAILURE;
+
+	param.param_id = wmi_vdev_param_chwidth_with_notify;
+	param.vdev_id = vdev_id;
+	param.param_value = ch_width;
+	status = tgt_vdev_mgr_set_param_send(vdev_mlme, &param);
+	policy_mgr_handle_ml_sta_link_on_traffic_type_change(psoc, vdev);
+
+	return status;
+}
+
+static QDF_STATUS wlan_mlme_update_ch_width(struct wlan_objmgr_vdev *vdev,
+					    uint8_t vdev_id,
+					    enum phy_ch_width ch_width)
+{
+	struct wlan_channel *des_chan;
+	struct wlan_channel *bss_chan;
+	uint16_t curr_op_freq;
+	struct ch_params ch_params = {0};
+	struct wlan_objmgr_pdev *pdev;
+
+	des_chan = wlan_vdev_mlme_get_des_chan(vdev);
+	if (!des_chan)
+		return QDF_STATUS_E_FAILURE;
+
+	bss_chan = wlan_vdev_mlme_get_bss_chan(vdev);
+	if (!bss_chan)
+		return QDF_STATUS_E_FAILURE;
+
+	pdev = wlan_vdev_get_pdev(vdev);
+	if (!pdev) {
+		mlme_err("vdev %d: Pdev is NULL", vdev_id);
+		return QDF_STATUS_E_INVAL;
+	}
+
+	ch_params.ch_width = ch_width;
+	curr_op_freq = des_chan->ch_freq;
+
+	wlan_reg_set_channel_params_for_pwrmode(pdev, curr_op_freq,
+						0, &ch_params,
+						REG_CURRENT_PWR_MODE);
+
+	des_chan->ch_width = ch_width;
+	des_chan->ch_freq_seg1 = ch_params.center_freq_seg0;
+	des_chan->ch_freq_seg2 = ch_params.center_freq_seg1;
+	des_chan->ch_cfreq1 = ch_params.mhz_freq_seg0;
+	des_chan->ch_cfreq2 = ch_params.mhz_freq_seg1;
+
+	qdf_mem_copy(bss_chan, des_chan, sizeof(struct wlan_channel));
+
+	mlme_legacy_debug("vdev id %d freq %d seg0 %d seg1 %d ch_width %d mhz seg0 %d mhz seg1 %d",
+			  vdev_id, curr_op_freq, ch_params.center_freq_seg0,
+			  ch_params.center_freq_seg1, ch_params.ch_width,
+			  ch_params.mhz_freq_seg0, ch_params.mhz_freq_seg1);
+
+	return QDF_STATUS_SUCCESS;
+}
+
+static uint32_t
+wlan_mlme_get_vht_rate_flags(enum phy_ch_width ch_width)
+{
+	uint32_t rate_flags = 0;
+
+	if (ch_width == CH_WIDTH_80P80MHZ || ch_width == CH_WIDTH_160MHZ)
+		rate_flags |= TX_RATE_VHT160 | TX_RATE_VHT80 | TX_RATE_VHT40 |
+				TX_RATE_VHT20;
+	if (ch_width == CH_WIDTH_80MHZ)
+		rate_flags |= TX_RATE_VHT80 | TX_RATE_VHT40 | TX_RATE_VHT20;
+	else if (ch_width)
+		rate_flags |= TX_RATE_VHT40 | TX_RATE_VHT20;
+	else
+		rate_flags |= TX_RATE_VHT20;
+	return rate_flags;
+}
+
+static uint32_t wlan_mlme_get_ht_rate_flags(enum phy_ch_width ch_width)
+{
+	uint32_t rate_flags = 0;
+
+	if (ch_width)
+		rate_flags |= TX_RATE_HT40 | TX_RATE_HT20;
+	else
+		rate_flags |= TX_RATE_HT20;
+
+	return rate_flags;
+}
+
+#ifdef WLAN_FEATURE_11BE
+static uint32_t
+wlan_mlme_get_eht_rate_flags(enum phy_ch_width ch_width)
+{
+	uint32_t rate_flags = 0;
+
+	if (ch_width == CH_WIDTH_320MHZ)
+		rate_flags |= TX_RATE_EHT320 | TX_RATE_EHT160 |
+				TX_RATE_EHT80 | TX_RATE_EHT40 | TX_RATE_EHT20;
+	else if (ch_width == CH_WIDTH_160MHZ || ch_width == CH_WIDTH_80P80MHZ)
+		rate_flags |= TX_RATE_EHT160 | TX_RATE_EHT80 | TX_RATE_EHT40 |
+				TX_RATE_EHT20;
+	else if (ch_width == CH_WIDTH_80MHZ)
+		rate_flags |= TX_RATE_EHT80 | TX_RATE_EHT40 | TX_RATE_EHT20;
+	else if (ch_width)
+		rate_flags |= TX_RATE_EHT40 | TX_RATE_EHT20;
+	else
+		rate_flags |= TX_RATE_EHT20;
+
+	return rate_flags;
+}
+
+static QDF_STATUS
+wlan_mlme_set_bss_rate_flags_eht(uint32_t *rate_flags, uint8_t eht_present,
+				 enum phy_ch_width ch_width)
+{
+	if (!eht_present)
+		return QDF_STATUS_E_NOSUPPORT;
+
+	*rate_flags |= wlan_mlme_get_eht_rate_flags(ch_width);
+
+	return QDF_STATUS_SUCCESS;
+}
+#else
+static inline QDF_STATUS
+wlan_mlme_set_bss_rate_flags_eht(uint32_t *rate_flags, uint8_t eht_present,
+				 enum phy_ch_width ch_width)
+{
+	return QDF_STATUS_E_NOSUPPORT;
+}
+#endif
+
+#ifdef WLAN_FEATURE_11AX
+static uint32_t wlan_mlme_get_he_rate_flags(enum phy_ch_width ch_width)
+{
+	uint32_t rate_flags = 0;
+
+	if (ch_width == CH_WIDTH_160MHZ ||
+	    ch_width == CH_WIDTH_80P80MHZ)
+		rate_flags |= TX_RATE_HE160 | TX_RATE_HE80 | TX_RATE_HE40 |
+				TX_RATE_HE20;
+	else if (ch_width == CH_WIDTH_80MHZ)
+		rate_flags |= TX_RATE_HE80 | TX_RATE_HE40 | TX_RATE_HE20;
+	else if (ch_width)
+		rate_flags |= TX_RATE_HE40 | TX_RATE_HE20;
+	else
+		rate_flags |= TX_RATE_HE20;
+
+	return rate_flags;
+}
+
+static QDF_STATUS wlan_mlme_set_bss_rate_flags_he(uint32_t *rate_flags,
+						  uint8_t he_present,
+						  enum phy_ch_width ch_width)
+{
+	if (!he_present)
+		return QDF_STATUS_E_NOSUPPORT;
+
+	*rate_flags |= wlan_mlme_get_he_rate_flags(ch_width);
+
+	return QDF_STATUS_SUCCESS;
+}
+
+#else
+static inline QDF_STATUS
+wlan_mlme_set_bss_rate_flags_he(uint32_t *rate_flags,
+				uint8_t he_present,
+				enum phy_ch_width ch_width)
+{
+	return QDF_STATUS_E_NOSUPPORT;
+}
+#endif
+
+static QDF_STATUS
+wlan_mlme_cp_stats_set_rate_flags(struct wlan_objmgr_vdev *vdev,
+				  uint32_t flags)
+{
+	struct vdev_mc_cp_stats *vdev_mc_stats;
+	struct vdev_cp_stats *vdev_cp_stats_priv;
+
+	vdev_cp_stats_priv = wlan_cp_stats_get_vdev_stats_obj(vdev);
+	if (!vdev_cp_stats_priv) {
+		cp_stats_err("vdev cp stats object is null");
+		return QDF_STATUS_E_NULL_VALUE;
+	}
+
+	wlan_cp_stats_vdev_obj_lock(vdev_cp_stats_priv);
+	vdev_mc_stats = vdev_cp_stats_priv->vdev_stats;
+	vdev_mc_stats->tx_rate_flags = flags;
+	wlan_cp_stats_vdev_obj_unlock(vdev_cp_stats_priv);
+
+	return QDF_STATUS_SUCCESS;
+}
+
+QDF_STATUS
+wlan_mlme_update_bss_rate_flags(struct wlan_objmgr_psoc *psoc, uint8_t vdev_id,
+				enum phy_ch_width cw, uint8_t eht_present,
+				uint8_t he_present, uint8_t vht_present,
+				uint8_t ht_present)
+{
+	uint32_t *rate_flags;
+	struct vdev_mlme_obj *vdev_mlme;
+	struct wlan_objmgr_vdev *vdev;
+	QDF_STATUS status;
+
+	if (!eht_present && !he_present && !vht_present && !ht_present)
+		return QDF_STATUS_E_INVAL;
+
+	vdev = wlan_objmgr_get_vdev_by_id_from_psoc(psoc, vdev_id,
+						    WLAN_HDD_ID_OBJ_MGR);
+	if (!vdev) {
+		mlme_debug("vdev: %d vdev not found", vdev_id);
+		return QDF_STATUS_E_INVAL;
+	}
+
+	vdev_mlme = wlan_vdev_mlme_get_cmpt_obj(vdev);
+	if (!vdev_mlme) {
+		mlme_debug("vdev: %d mlme obj not found", vdev_id);
+		wlan_objmgr_vdev_release_ref(vdev, WLAN_HDD_ID_OBJ_MGR);
+		return QDF_STATUS_E_INVAL;
+	}
+
+	rate_flags = &vdev_mlme->mgmt.rate_info.rate_flags;
+	*rate_flags = 0;
+
+	status = wlan_mlme_set_bss_rate_flags_eht(rate_flags, eht_present, cw);
+	if (QDF_IS_STATUS_ERROR(status)) {
+		status = wlan_mlme_set_bss_rate_flags_he(rate_flags,
+							 he_present, cw);
+		if (QDF_IS_STATUS_ERROR(status)) {
+			if (vht_present)
+				*rate_flags = wlan_mlme_get_vht_rate_flags(cw);
+			else if (ht_present)
+				*rate_flags |= wlan_mlme_get_ht_rate_flags(cw);
+		}
+	}
+
+	mlme_debug("vdev:%d, eht:%u, he:%u, vht:%u, ht:%u, flag:%x, cw:%d",
+		   vdev_id, eht_present, he_present, vht_present, ht_present,
+		   *rate_flags, cw);
+
+	status = wlan_mlme_cp_stats_set_rate_flags(vdev, *rate_flags);
+
+	wlan_objmgr_vdev_release_ref(vdev, WLAN_HDD_ID_OBJ_MGR);
+	return status;
+}
+
+QDF_STATUS
+wlan_mlme_send_ch_width_update_with_notify(struct wlan_objmgr_psoc *psoc,
+					   struct wlan_objmgr_vdev *vdev,
+					   uint8_t vdev_id,
+					   enum phy_ch_width ch_width)
+{
+	QDF_STATUS status;
+	enum phy_ch_width associated_ch_width;
+	struct wlan_channel *des_chan;
+
+	des_chan = wlan_vdev_mlme_get_des_chan(vdev);
+	if (!des_chan)
+		return QDF_STATUS_E_INVAL;
+
+	if (wlan_reg_is_24ghz_ch_freq(des_chan->ch_freq)) {
+		mlme_debug("vdev %d: CW:%d update not supported for freq:%d",
+			   vdev_id, ch_width, des_chan->ch_freq);
+		return QDF_STATUS_E_NOSUPPORT;
+	}
+
+	associated_ch_width = wlan_cm_get_associated_ch_width(psoc, vdev_id);
+	if (ch_width > associated_ch_width) {
+		mlme_debug("vdev %d: Invalid new chwidth:%d, assoc ch_width:%d",
+			   vdev_id, ch_width, associated_ch_width);
+		return QDF_STATUS_E_INVAL;
+	}
+
+	/* update ch width to internal host structure */
+	status = wlan_mlme_update_ch_width(vdev, vdev_id, ch_width);
+	if (QDF_IS_STATUS_ERROR(status)) {
+		mlme_err("vdev %d: Failed to update CW:%d to host, status:%d",
+			 vdev_id, ch_width, status);
+		return status;
+	}
+
+	/* update ch width to fw */
+	status = wlan_mlme_update_vdev_chwidth_with_notify(psoc, vdev, vdev_id,
+							   ch_width);
+	if (QDF_IS_STATUS_ERROR(status))
+		mlme_err("vdev %d: Failed to update CW:%d to fw, status:%d",
+			 vdev_id, ch_width, status);
+
+	return status;
+}
 
 enum phy_ch_width wlan_mlme_convert_vht_op_bw_to_phy_ch_width(
 						uint8_t channel_width)

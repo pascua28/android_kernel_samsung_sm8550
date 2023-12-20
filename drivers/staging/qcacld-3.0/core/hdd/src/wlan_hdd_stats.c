@@ -3932,6 +3932,63 @@ static QDF_STATUS wlan_hdd_stats_request_needed(struct hdd_adapter *adapter)
 }
 #endif /* WLAN_FEATURE_LINK_LAYER_STATS */
 
+/**
+ * __wlan_hdd_cfg80211_connected_chan_stats_request() - stats request for
+ * currently connected channel
+ * @wiphy: Pointer to wiphy
+ * @wdev: Pointer to wdev
+ * @data: Pointer to data
+ * @data_len: Data length
+ *
+ * Return: int
+ */
+static int
+__wlan_hdd_cfg80211_connected_chan_stats_request(struct wiphy *wiphy,
+						 struct wireless_dev *wdev,
+						 const void *data,
+						 int data_len)
+{
+	struct net_device *dev = wdev->netdev;
+	struct hdd_adapter *adapter = WLAN_HDD_GET_PRIV_PTR(dev);
+	struct hdd_context *hdd_ctx = wiphy_priv(wiphy);
+	bool is_vdev_connected;
+	enum QDF_OPMODE mode;
+
+	is_vdev_connected = hdd_cm_is_vdev_connected(adapter);
+	mode = adapter->device_mode;
+	if (mode == QDF_STA_MODE && is_vdev_connected) {
+		ucfg_mlme_connected_chan_stats_request(hdd_ctx->psoc,
+						adapter->vdev_id);
+	} else {
+		hdd_debug("vdev %d: reject chan stats req, mode:%d, conn:%d",
+			  adapter->vdev_id , mode, is_vdev_connected);
+		return -EINVAL;
+	}
+
+	return 0;
+}
+
+int wlan_hdd_cfg80211_connected_chan_stats_req(struct wiphy *wiphy,
+					       struct wireless_dev *wdev,
+					       const void *data,
+					       int data_len)
+{
+	int errno;
+	struct osif_vdev_sync *vdev_sync;
+
+	errno = osif_vdev_sync_op_start(wdev->netdev, &vdev_sync);
+	if (errno)
+		return errno;
+
+	errno = __wlan_hdd_cfg80211_connected_chan_stats_request(wiphy, wdev,
+								 data,
+								 data_len);
+
+	osif_vdev_sync_op_stop(vdev_sync);
+
+	return errno;
+}
+
 #ifdef WLAN_FEATURE_STATS_EXT
 /**
  * __wlan_hdd_cfg80211_stats_ext_request() - ext stats request
@@ -6468,7 +6525,7 @@ static int wlan_hdd_get_sta_stats(struct wiphy *wiphy,
 			  "[RX: Reporting MCS rate %d, flags 0x%x pkt cnt %d, nss %d, bw %d]",
 			  sinfo->txrate.mcs, sinfo->txrate.flags,
 			  sinfo->tx_packets, sinfo->txrate.nss,
-			  sinfo->rxrate.bw, sinfo->rxrate.mcs,
+			  sinfo->txrate.bw, sinfo->rxrate.mcs,
 			  sinfo->rxrate.flags, sinfo->rx_packets,
 			  sinfo->rxrate.nss, sinfo->rxrate.bw);
 	}

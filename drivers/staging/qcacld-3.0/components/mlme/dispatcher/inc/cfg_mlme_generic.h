@@ -268,7 +268,7 @@ enum t2lm_negotiation_support {
 #endif
 
 #ifdef CONFIG_BAND_6GHZ
-/**
+/*
  * relaxed_6ghz_conn_policy - Enable 6ghz relaxed connection policy
  * @Min: 0
  * @Max: 1

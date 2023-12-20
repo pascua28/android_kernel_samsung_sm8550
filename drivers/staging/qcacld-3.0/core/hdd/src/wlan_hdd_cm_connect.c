@@ -374,7 +374,8 @@ hdd_update_action_oui_for_connect(struct hdd_context *hdd_ctx,
 		return;
 
 	usr_disable_eht = ucfg_mlme_get_usr_disable_sta_eht(hdd_ctx->psoc);
-	if (req->flags & ASSOC_REQ_DISABLE_EHT) {
+	if (req->flags & ASSOC_REQ_DISABLE_EHT ||
+	    !(req->flags & CONNECT_REQ_MLO_SUPPORT)) {
 		if (usr_disable_eht) {
 			hdd_debug("user eht is disabled already");
 			return;
@@ -983,6 +984,16 @@ static void hdd_cm_save_bss_info(struct hdd_adapter *adapter,
 	} else {
 		hdd_sta_ctx->conn_info.conn_flag.vht_op_present = false;
 	}
+
+	if (assoc_resp->he_cap.present)
+		hdd_sta_ctx->conn_info.conn_flag.he_present = true;
+	else
+		hdd_sta_ctx->conn_info.conn_flag.he_present = false;
+
+	if (assoc_resp->eht_cap.present)
+		hdd_sta_ctx->conn_info.conn_flag.eht_present = true;
+	else
+		hdd_sta_ctx->conn_info.conn_flag.eht_present = false;
 
 	/*
 	 * Cache connection info only in case of station

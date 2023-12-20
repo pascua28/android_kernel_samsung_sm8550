@@ -2677,6 +2677,13 @@ static int hdd_sta_twt_terminate_session(struct hdd_adapter *adapter,
 	if (!ucfg_mlme_is_twt_setup_done(adapter->hdd_ctx->psoc,
 					 &hdd_sta_ctx->conn_info.bssid,
 					 params.dialog_id)) {
+#ifdef SEC_CONFIG_TWT
+// case 05405528 - return OKAY only when dialog_id is ALL but no active TWT session
+		if(params.dialog_id == TWT_ALL_SESSIONS_DIALOG_ID) {
+			hdd_debug("no active session to clean up, return okay");
+			return 0;
+		}
+#endif
 		hdd_debug("vdev%d: TWT session %d setup incomplete",
 			  params.vdev_id, params.dialog_id);
 		return -EAGAIN;

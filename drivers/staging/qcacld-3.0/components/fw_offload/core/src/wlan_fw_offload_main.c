@@ -1,6 +1,6 @@
 /*
  * Copyright (c) 2018-2021 The Linux Foundation. All rights reserved.
- * Copyright (c) 2022 Qualcomm Innovation Center, Inc. All rights reserved
+ * Copyright (c) 2022-2023 Qualcomm Innovation Center, Inc. All rights reserved.
  *
  * Permission to use, copy, modify, and/or distribute this software for
  * any purpose with or without fee is hereby granted, provided that the
@@ -24,6 +24,9 @@
 #include "cds_api.h"
 #include "wma.h"
 #include "wlan_fwol_tgt_api.h"
+#ifdef SEC_CONFIG_PSM_SYSFS
+extern int wlan_hdd_sec_get_psm(void);
+#endif /* SEC_CONFIG_PSM_SYSFS */
 
 struct wlan_fwol_psoc_obj *fwol_get_psoc_obj(struct wlan_objmgr_psoc *psoc)
 {
@@ -247,6 +250,12 @@ QDF_STATUS fwol_init_neighbor_report_cfg(struct wlan_objmgr_psoc *psoc,
 		cfg_get(psoc, CFG_OFFLOAD_NEIGHBOR_REPORT_CACHE_TIMEOUT);
 	fwol_neighbor_report_cfg->max_req_cap =
 		cfg_get(psoc, CFG_OFFLOAD_NEIGHBOR_REPORT_MAX_REQ_CAP);
+#ifdef SEC_CONFIG_PSM_SYSFS
+	if (wlan_hdd_sec_get_psm()) {
+		fwol_neighbor_report_cfg->enable_bitmask = 0;
+		printk("[WIFI] CFG_OFFLOAD_11K_ENABLE_BITMASK : sec_control_psm = %u", fwol_neighbor_report_cfg->enable_bitmask);
+	}
+#endif /* SEC_CONFIG_PSM_SYSFS */
 
 	fwol_set_neighbor_report_offload_params(psoc, fwol_neighbor_report_cfg);
 
@@ -645,6 +654,7 @@ QDF_STATUS fwol_cfg_on_psoc_enable(struct wlan_objmgr_psoc *psoc)
 	fwol_init_ie_whiltelist_in_cfg(psoc, &fwol_cfg->ie_allowlist_cfg);
 	fwol_init_neighbor_report_cfg(psoc, &fwol_cfg->neighbor_report_cfg);
 	fwol_cfg->ani_enabled = cfg_get(psoc, CFG_ENABLE_ANI);
+	fwol_cfg->pcie_config = cfg_get(psoc, CFG_PCIE_CONFIG);
 	fwol_cfg->enable_rts_sifsbursting =
 				cfg_get(psoc, CFG_SET_RTS_FOR_SIFS_BURSTING);
 	fwol_cfg->enable_sifs_burst = cfg_get(psoc, CFG_SET_SIFS_BURST);

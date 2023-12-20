@@ -1071,7 +1071,8 @@ enum udp_qos_upgrade {
  * @ch_switch_in_progress:
  * @acs_complete_event: acs complete event
  * @tsf: structure containing tsf related information
- * @mc_addr_list:
+ * @mc_addr_list: multicast address list
+ * @mc_list_lock: spin lock for multicast list
  * @addr_filter_pattern:
  * @scan_info:
  * @psb_changed: Flag to ensure PSB is configured through framework
@@ -1239,6 +1240,7 @@ struct hdd_adapter {
 	struct hdd_vdev_tsf tsf;
 #endif
 	struct hdd_multicast_addr_list mc_addr_list;
+	qdf_spinlock_t mc_list_lock;
 	uint8_t addr_filter_pattern;
 
 	struct hdd_scan_info scan_info;
@@ -1946,7 +1948,7 @@ struct hdd_context {
 	struct completion mc_sus_event_var;
 	bool is_scheduler_suspended;
 
-#ifdef QCA_CONFIG_SMP
+#ifdef WLAN_DP_LEGACY_OL_RX_THREAD
 	bool is_ol_rx_thread_suspended;
 #endif
 
@@ -2289,6 +2291,10 @@ struct hdd_chwidth_info {
 /*
  * Function declarations and documentation
  */
+
+#ifdef SEC_CONFIG_PSM_SYSFS
+int wlan_hdd_sec_get_psm(void);
+#endif /* SEC_CONFIG_PSM_SYSFS */
 
 /**
  * wlan_hdd_history_get_next_index() - get next index to store the history
@@ -4947,5 +4953,13 @@ static inline void wlan_hdd_link_speed_update(struct wlan_objmgr_psoc *psoc,
 					      bool is_link_speed_good)
 {}
 #endif
+
+/**
+ * hdd_update_multicast_list() - update the multicast list
+ * @vdev: pointer to VDEV object
+ *
+ * Return: none
+ */
+void hdd_update_multicast_list(struct wlan_objmgr_vdev *vdev);
 
 #endif /* end #if !defined(WLAN_HDD_MAIN_H) */

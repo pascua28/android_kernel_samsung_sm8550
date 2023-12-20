@@ -1912,6 +1912,60 @@ cm_populate_roam_chan_list(struct wlan_objmgr_vdev *vdev,
 	return QDF_STATUS_SUCCESS;
 }
 
+void
+cm_update_tried_candidate_freq_list(struct wlan_objmgr_psoc *psoc,
+				    struct wlan_objmgr_vdev *vdev,
+				    struct wlan_cm_connect_resp *connect_rsp)
+{
+	struct wlan_mlme_psoc_ext_obj *mlme_obj;
+	struct rso_config *rso_cfg;
+	struct wlan_chan_list *tried_freq_list;
+	enum band_info band;
+	uint32_t band_cap;
+
+	if (!connect_rsp->freq || (connect_rsp->reason != CM_JOIN_TIMEOUT &&
+	    connect_rsp->reason != CM_AUTH_TIMEOUT &&
+	    connect_rsp->reason != CM_ASSOC_TIMEOUT))
+		return;
+
+	mlme_obj = mlme_get_psoc_ext_obj(psoc);
+	if (!mlme_obj)
+		return;
+
+	band_cap = mlme_obj->cfg.gen.band_capability;
+	if (!band_cap) {
+		mlme_err("vdev: %d Invalid band_cap(%d)", connect_rsp->vdev_id,
+			 band_cap);
+		return;
+	}
+
+	band = wlan_reg_band_bitmap_to_band_info(band_cap);
+	if (cm_is_dfs_unsafe_extra_band_chan(vdev, mlme_obj,
+					     connect_rsp->freq, band))
+		return;
+
+	rso_cfg = wlan_cm_get_rso_config(vdev);
+	if (!rso_cfg)
+		return;
+
+	tried_freq_list = &rso_cfg->tried_candidate_freq_list;
+
+	if (tried_freq_list->num_chan >= CFG_VALID_CHANNEL_LIST_LEN)
+		return;
+
+	if (wlan_is_channel_present_in_list(tried_freq_list->freq_list,
+					    tried_freq_list->num_chan,
+					    connect_rsp->freq))
+		return;
+
+	tried_freq_list->freq_list[tried_freq_list->num_chan++] =
+						connect_rsp->freq;
+
+	mlme_debug("vdev: %d added freq:%d, total num freq %d",
+		   connect_rsp->vdev_id, connect_rsp->freq,
+		   tried_freq_list->num_chan);
+}
+
 static QDF_STATUS
 cm_fetch_ch_lst_from_ini(struct wlan_objmgr_vdev *vdev,
 			 struct wlan_mlme_psoc_ext_obj *mlme_obj,
@@ -2111,6 +2165,29 @@ cm_fetch_valid_ch_lst(struct wlan_objmgr_vdev *vdev,
 }
 
 static void
+cm_update_rso_freq_list(struct rso_config *rso_cfg,
+			struct wlan_roam_scan_channel_list *chan_info)
+{
+	struct wlan_chan_list *tried_freq_list;
+	uint8_t i;
+
+	tried_freq_list = &rso_cfg->tried_candidate_freq_list;
+
+	if (!tried_freq_list->num_chan)
+		return;
+
+	for (i = 0; i < tried_freq_list->num_chan &&
+	     chan_info->chan_count < CFG_VALID_CHANNEL_LIST_LEN; i++) {
+		if (wlan_is_channel_present_in_list(chan_info->chan_freq_list,
+						chan_info->chan_count,
+						tried_freq_list->freq_list[i]))
+			continue;
+		chan_info->chan_freq_list[chan_info->chan_count++] =
+					tried_freq_list->freq_list[i];
+	}
+}
+
+static void
 cm_fill_rso_channel_list(struct wlan_objmgr_psoc *psoc,
 			 struct wlan_objmgr_vdev *vdev,
 			 struct rso_config *rso_cfg,
@@ -2159,6 +2236,14 @@ cm_fill_rso_channel_list(struct wlan_objmgr_psoc *psoc,
 			 */
 			cm_add_ch_lst_from_roam_scan_list(vdev, mlme_obj,
 							  chan_info, rso_cfg);
+
+			/*
+			 * update the roam channel list on the top of entries
+			 * present in the scan db which gets stored in the rso
+			 * config during connect resp failure in
+			 * wlan_cm_send_connect_rsp
+			 */
+			cm_update_rso_freq_list(rso_cfg, chan_info);
 		}
 	} else {
 		/*
@@ -5646,6 +5731,7 @@ QDF_STATUS cm_start_roam_invoke(struct wlan_objmgr_psoc *psoc,
 	struct qdf_mac_addr connected_bssid;
 	uint8_t vdev_id = vdev->vdev_objmgr.vdev_id;
 	bool roam_offload_enabled = cm_roam_offload_enabled(psoc);
+	struct rso_config *rso_cfg;
 
 	roam_control_bitmap = mlme_get_operations_bitmap(psoc, vdev_id);
 	if (roam_offload_enabled && (roam_control_bitmap ||
@@ -5664,6 +5750,10 @@ QDF_STATUS cm_start_roam_invoke(struct wlan_objmgr_psoc *psoc,
 		qdf_mem_free(cm_req);
 		return QDF_STATUS_E_FAILURE;
 	}
+
+	rso_cfg = wlan_cm_get_rso_config(vdev);
+	if (!rso_cfg)
+		return QDF_STATUS_E_NULL_VALUE;
 
 	/* Ignore BSSID and channel validation for FW host roam */
 	if (source == CM_ROAMING_FW)
@@ -5685,13 +5775,17 @@ QDF_STATUS cm_start_roam_invoke(struct wlan_objmgr_psoc *psoc,
 			qdf_mem_free(cm_req);
 			return QDF_STATUS_E_NOSUPPORT;
 		}
+
 		cm_req->roam_req.req.forced_roaming = true;
+		if (source == CM_ROAMING_HOST || source == CM_ROAMING_USER)
+			rso_cfg->is_forced_roaming = true;
 		source = CM_ROAMING_NUD_FAILURE;
 		goto send_evt;
 	}
 
 	if (qdf_is_macaddr_broadcast(bssid)) {
 		qdf_copy_macaddr(&cm_req->roam_req.req.bssid, bssid);
+		qdf_copy_macaddr(&rso_cfg->roam_invoke_bssid, bssid);
 		mlme_debug("Roam only if better candidate found else stick to current AP");
 		goto send_evt;
 	}
@@ -5714,6 +5808,17 @@ QDF_STATUS cm_start_roam_invoke(struct wlan_objmgr_psoc *psoc,
 
 send_evt:
 	cm_req->roam_req.req.source = source;
+
+	/* Storing source information in rso cfg as if FW aborts
+	 * roam host will delete roam req from queue.
+	 * In roam invoke failure, host will read rso cfg params
+	 * information and disconnect if needed.
+	 */
+	if (source == CM_ROAMING_HOST ||
+	    source == CM_ROAMING_NUD_FAILURE ||
+	    source == CM_ROAMING_LINK_REMOVAL ||
+	    source == CM_ROAMING_USER)
+		rso_cfg->roam_invoke_source = source;
 
 	cm_req->roam_req.req.vdev_id = vdev_id;
 	/*
@@ -6998,6 +7103,11 @@ cm_roam_beacon_loss_disconnect_event(struct wlan_objmgr_psoc *psoc,
 	if (!vdev) {
 		mlme_err("Vdev[%d] is null", vdev_id);
 		return QDF_STATUS_E_FAILURE;
+	}
+
+	if (wlan_vdev_mlme_get_opmode(vdev) != QDF_STA_MODE) {
+		wlan_objmgr_vdev_release_ref(vdev, WLAN_MLME_CM_ID);
+		return status;
 	}
 
 	qdf_mem_zero(&wlan_diag_event, sizeof(wlan_diag_event));

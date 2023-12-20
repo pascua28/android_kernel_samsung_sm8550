@@ -184,6 +184,11 @@ static int __wlan_hdd_cfg80211_remain_on_channel(struct wiphy *wiphy,
 		return -EINVAL;
 	}
 
+	if (!wlan_is_scan_allowed(vdev)) {
+		wlan_objmgr_vdev_release_ref(vdev, WLAN_OSIF_P2P_ID);
+		return -EBUSY;
+	}
+
 	/* Disable NAN Discovery if enabled */
 	ucfg_nan_disable_concurrency(hdd_ctx->psoc);
 
@@ -821,8 +826,14 @@ struct wireless_dev *__wlan_hdd_add_virtual_intf(struct wiphy *wiphy,
 
 	adapter = NULL;
 	cfg_p2p_get_device_addr_admin(hdd_ctx->psoc, &p2p_dev_addr_admin);
+#ifdef SEC_READ_MACADDR_SYSFS
+	if ((p2p_dev_addr_admin &&
+	    (mode == QDF_P2P_GO_MODE || mode == QDF_P2P_CLIENT_MODE)
+        ) || !(strncmp(name, "swlan", 5))) {
+#else //!SEC_READ_MACADDR_SYSFS
 	if (p2p_dev_addr_admin &&
 	    (mode == QDF_P2P_GO_MODE || mode == QDF_P2P_CLIENT_MODE)) {
+#endif //SEC_READ_MACADDR_SYSFS
 		/*
 		 * Generate the P2P Interface Address. this address must be
 		 * different from the P2P Device Address.
