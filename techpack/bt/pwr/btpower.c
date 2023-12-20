@@ -138,7 +138,9 @@ static struct bt_power_vreg_data bt_vregs_info_qca6xx0[] = {
 	/* BT_CX_MX */
 	{NULL, "qcom,bt-vdd-dig",      966000,  966000,  0, false, true,
 		{BT_VDD_DIG_LDO, BT_VDD_DIG_LDO_CURRENT}},
-	{NULL, "qcom,bt-vdd-rfa-0p8",  950000,  952000,  0, false, true,
+	{NULL, "qcom,bt-vdd-rfaOp8", 950000, 952000, 0, false, true,
+		{BT_VDD_RFA_0p8, BT_VDD_RFA_0p8_CURRENT}},
+	{NULL, "qcom,bt-vdd-pmuCx", 950000, 952000, 0, false, true,
 		{BT_VDD_RFA_0p8, BT_VDD_RFA_0p8_CURRENT}},
 	{NULL, "qcom,bt-vdd-rfa1",     1900000, 1900000, 0, false, true,
 		{BT_VDD_RFA1_LDO, BT_VDD_RFA1_LDO_CURRENT}},
@@ -1202,7 +1204,7 @@ static int bt_power_probe(struct platform_device *pdev)
 		return -ENOMEM;
 
 	bt_power_pdata->pdev = pdev;
-        bt_power_pdata->is_converged_dt = bt_is_converged_dt(pdev);
+	bt_power_pdata->is_converged_dt = bt_is_converged_dt(pdev);
 	if (bt_power_pdata->is_converged_dt) {
 		if (of_find_property(pdev->dev.of_node, WLAN_SW_CTRL_GPIO, NULL)) {
 			bt_power_pdata->wlan_sw_ctrl_gpio =
@@ -1214,12 +1216,12 @@ static int bt_power_probe(struct platform_device *pdev)
 		}
 		gpio_value = gpio_get_value(bt_power_pdata->wlan_sw_ctrl_gpio);
 		pr_info("%s:WLAN_SW_CNTRL_GPIO value= %d\n", __func__, gpio_value);
-		if(gpio_value) {
-			bt_power_pdata->bt_device_type =
-				cnss_utils_update_device_type(CNSS_HSP_DEVICE_TYPE);
+		if (gpio_value) {
+			bt_power_pdata->bt_device_type = 1;
+				//cnss_utils_update_device_type(CNSS_HSP_DEVICE_TYPE);
 		} else {
-			bt_power_pdata->bt_device_type =
-				cnss_utils_update_device_type(CNSS_HMT_DEVICE_TYPE);
+			bt_power_pdata->bt_device_type = 0;
+				//cnss_utils_update_device_type(CNSS_HMT_DEVICE_TYPE);
 		}
 	}
 	ret = perisec_cnss_bt_hw_disable_check(bt_power_pdata);
