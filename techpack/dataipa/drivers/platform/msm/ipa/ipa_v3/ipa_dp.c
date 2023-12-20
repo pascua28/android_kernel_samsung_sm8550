@@ -2643,6 +2643,8 @@ static struct page *ipa3_alloc_page(
 	if (unlikely(!page)) {
 		if (try_lower && p_order > 0) {
 			p_order = p_order - 1;
+			flag = GFP_KERNEL | __GFP_RETRY_MAYFAIL |
+				__GFP_NOMEMALLOC;
 			page = __dev_alloc_pages(flag, p_order);
 			if (likely(page))
 				ipa3_ctx->stats.lower_order++;
