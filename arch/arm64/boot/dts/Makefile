@@ -30,7 +30,6 @@ subdir-y += synaptics
 subdir-y += ti
 subdir-y += toshiba
 subdir-y += xilinx
-subdir-y += samsung
 
 dtstree	:= $(srctree)/$(src)
 #vendor  := $(dtstree)/vendor
