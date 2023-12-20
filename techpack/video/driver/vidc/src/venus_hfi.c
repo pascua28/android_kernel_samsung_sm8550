@@ -28,6 +28,10 @@
 #include "venus_hfi_response.h"
 #include "msm_vidc_events.h"
 
+#if IS_ENABLED(CONFIG_SEC_ABC) && IS_ENABLED(CONFIG_SEC_FACTORY)
+#include <linux/sti/abc_common.h>
+#endif
+
 #define MAX_FIRMWARE_NAME_SIZE 128
 
 #define update_offset(offset, val)		((offset) += (val))
@@ -1103,6 +1107,9 @@ static void __flush_debug_queue(struct msm_vidc_core *core,
 	struct hfi_debug_header *pkt;
 	bool local_packet = false;
 	enum vidc_msg_prio log_level = msm_vidc_debug;
+#if IS_ENABLED(CONFIG_SEC_ABC) && IS_ENABLED(CONFIG_SEC_FACTORY)
+	char *checkHung;
+#endif
 
 	if (!core) {
 		d_vpr_e("%s: invalid params\n", __func__);
@@ -1148,6 +1155,13 @@ static void __flush_debug_queue(struct msm_vidc_core *core,
 		 */
 		log = (u8 *)packet + sizeof(struct hfi_debug_header) + 1;
 		dprintk_firmware(log_level, "%s", log);
+		
+#if IS_ENABLED(CONFIG_SEC_ABC) && IS_ENABLED(CONFIG_SEC_FACTORY)
+		checkHung = strstr(log, "VCODEC HW is hung");
+		if (checkHung != NULL){
+			sec_abc_send_event("MODULE=mm@WARN=venus_hung");
+		}
+#endif
 	}
 
 	if (local_packet)

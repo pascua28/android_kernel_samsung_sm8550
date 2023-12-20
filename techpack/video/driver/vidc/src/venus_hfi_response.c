@@ -15,6 +15,10 @@
 #include "msm_vidc_memory.h"
 #include "msm_vidc_fence.h"
 
+#if IS_ENABLED(CONFIG_SEC_ABC) && IS_ENABLED(CONFIG_SEC_FACTORY)
+#include <linux/sti/abc_common.h>
+#endif
+
 #define in_range(range, val) (((range.begin) < (val)) && ((range.end) > (val)))
 
 extern struct msm_vidc_core *g_core;
@@ -335,6 +339,10 @@ static int handle_session_info(struct msm_vidc_inst *inst,
 	case HFI_INFO_DATA_CORRUPT:
 		info = "data corrupt";
 		inst->hfi_frame_info.data_corrupt = 1;
+#if IS_ENABLED(CONFIG_SEC_ABC) && IS_ENABLED(CONFIG_SEC_FACTORY)
+		i_vpr_e(inst, "session info (%#x): %s\n", pkt->type, info);
+		sec_abc_send_event("MODULE=mm@INFO=venus_data_corrupt");
+#endif
 		break;
 	case HFI_INFO_BUFFER_OVERFLOW:
 		info = "buffer overflow";
