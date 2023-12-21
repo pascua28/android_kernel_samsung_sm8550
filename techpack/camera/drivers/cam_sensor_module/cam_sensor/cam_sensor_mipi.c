@@ -44,7 +44,7 @@ extern char mipi_string[20];
  * ZZ ZZ ZZ ZZ - FREQ INFO
  */
 
-void *bsearch(const void *key, const void *base, size_t num, size_t size, cmp_func_t cmp)
+static void *bsearch(const void *key, const void *base, size_t num, size_t size, cmp_func_t cmp)
 {
 	const char *pivot;
 	int result;
