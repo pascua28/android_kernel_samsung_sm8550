@@ -46,6 +46,7 @@ static int __modem_reset_data_restore(struct qc_user_reset_drvdata *drvdata)
 	struct sec_qc_summary_data_modem *modem;
 	bool result;
 
+#if IS_ENABLED(CONFIG_SEC_QC_SUMMARY)
 	modem = sec_qc_summary_get_modem();
 	if (PTR_ERR(modem) == -EBUSY)
 		return -EPROBE_DEFER;
@@ -53,6 +54,9 @@ static int __modem_reset_data_restore(struct qc_user_reset_drvdata *drvdata)
 		dev_warn(dev, "modem reset data is skipped.");
 		return 0;
 	}
+#else
+		return -EPROBE_DEFER;
+#endif
 
 	result = sec_qc_dbg_part_read(debug_index_modem_info, modem);
 	if (!result)

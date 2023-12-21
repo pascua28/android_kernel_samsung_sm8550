@@ -14,8 +14,6 @@
 
 #if IS_ENABLED(CONFIG_SEC_QC_SUMMARY)
 extern struct sec_qc_summary_data_modem *sec_qc_summary_get_modem(void);
-#else
-static inline struct sec_qc_summary_data_modem *sec_qc_summary_get_modem(void) { return ERR_PTR(-ENODEV); }
 #endif
 
 #endif	/* __SEC_QC_SUMMARY_H__ */
