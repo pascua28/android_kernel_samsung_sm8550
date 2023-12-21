@@ -74,18 +74,18 @@ struct stats_info {
 	u32 *freq_info;
 };
 
-struct stats_info *pinfo;
+struct stats_info *scmi_pinfo;
 
 static u32 get_num_opps_for_clkdom(u32 clkdom)
 {
 	u32 dom_data_off;
 	void __iomem *dom_data;
 
-	dom_data_off = 4 * readl_relaxed(pinfo->stats_iomem +
+	dom_data_off = 4 * readl_relaxed(scmi_pinfo->stats_iomem +
 					 offsetof(struct scmi_stats,
 						  perf_dom_entry_off_arr) +
 					 4 * clkdom);
-	dom_data = pinfo->stats_iomem + dom_data_off;
+	dom_data = scmi_pinfo->stats_iomem + dom_data_off;
 	return readl_relaxed(dom_data) & 0xFF;
 }
 
@@ -94,11 +94,11 @@ static u32 get_freq_at_idx_for_clkdom(u32 clkdom, u32 idx)
 	u32 dom_data_off;
 	void __iomem *dom_data;
 
-	dom_data_off = 4 * readl_relaxed(pinfo->stats_iomem +
+	dom_data_off = 4 * readl_relaxed(scmi_pinfo->stats_iomem +
 					 offsetof(struct scmi_stats,
 						  perf_dom_entry_off_arr) +
 					 4 * clkdom);
-	dom_data = pinfo->stats_iomem + dom_data_off +
+	dom_data = scmi_pinfo->stats_iomem + dom_data_off +
 		   offsetof(struct perf_dom_entry, perf_lvl_arr) +
 		   idx * sizeof(struct perf_lvl_entry) +
 		   offsetof(struct perf_lvl_entry, perf_lvl);
@@ -124,8 +124,8 @@ static ssize_t stats_get(struct file *file, char __user *user_buf, size_t count,
 	if (!entry)
 		return -ENOENT;
 	clkdom = entry->clkdom;
-	dom_data = pinfo->stats_iomem +
-		   4 * readl_relaxed(pinfo->stats_iomem +
+	dom_data = scmi_pinfo->stats_iomem +
+		   4 * readl_relaxed(scmi_pinfo->stats_iomem +
 				     offsetof(struct scmi_stats,
 					      perf_dom_entry_off_arr) +
 				     4 * clkdom);
@@ -150,7 +150,7 @@ static ssize_t stats_get(struct file *file, char __user *user_buf, size_t count,
 	// read the iomem data for clkdom
 	do {
 		match_old = readl_relaxed(
-			pinfo->stats_iomem +
+			scmi_pinfo->stats_iomem +
 			offsetof(struct scmi_stats, match_sequence));
 		if (match_old % 2)
 			continue;
@@ -164,13 +164,13 @@ static ssize_t stats_get(struct file *file, char __user *user_buf, size_t count,
 					  << 32;
 		}
 		match_new = readl_relaxed(
-			pinfo->stats_iomem +
+			scmi_pinfo->stats_iomem +
 			offsetof(struct scmi_stats, match_sequence));
 	} while (match_old != match_new);
 
 	for (i = 0; i < num_lvl; i++) {
 		bytes += scnprintf(str + bytes, 4096 - bytes, "%u %llu\n",
-				 pinfo->freq_info[pinfo->freq_info[clkdom] + i],
+				 scmi_pinfo->freq_info[scmi_pinfo->freq_info[clkdom] + i],
 				 vals[i]);
 	}
 
@@ -201,7 +201,7 @@ static int scmi_cpufreq_stats_create_fs_entries(struct device *dev)
 		return -ENOENT;
 	}
 
-	for (i = 0; i < pinfo->num_clkdom; i++) {
+	for (i = 0; i < scmi_pinfo->num_clkdom; i++) {
 		snprintf(clkdom_name, MAX_CLK_DOMAIN, "clkdom%d", i);
 
 		// create per-core dirs
@@ -214,10 +214,10 @@ static int scmi_cpufreq_stats_create_fs_entries(struct device *dev)
 
 		ret = debugfs_create_file(
 			CPUFREQ_STATS_USAGE_FILENAME, 0400, clkdom_dir,
-			pinfo->entries + i * ENTRY_MAX + usage, &stats_ops);
+			scmi_pinfo->entries + i * ENTRY_MAX + usage, &stats_ops);
 		ret = debugfs_create_file(
 			CPUFREQ_STATS_RESIDENCY_FILENAME, 0400, clkdom_dir,
-			pinfo->entries + i * ENTRY_MAX + residency, &stats_ops);
+			scmi_pinfo->entries + i * ENTRY_MAX + residency, &stats_ops);
 	}
 
 	return 0;
@@ -238,70 +238,70 @@ static int qcom_cpufreq_stats_init(struct scmi_handle *handle)
 		return ret;
 	}
 	if (prot_attr.statistics_len && prot_attr.statistics_address_low) {
-		pinfo = kcalloc(1, sizeof(struct stats_info), GFP_KERNEL);
-		if (!pinfo)
+		scmi_pinfo = kcalloc(1, sizeof(struct stats_info), GFP_KERNEL);
+		if (!scmi_pinfo)
 			return -ENOMEM;
-		pinfo->stats_iomem = ioremap(prot_attr.statistics_address_low |
+		scmi_pinfo->stats_iomem = ioremap(prot_attr.statistics_address_low |
 						(u64)prot_attr.statistics_address_high << 32,
 						 prot_attr.statistics_len);
-		if (!pinfo->stats_iomem) {
-			kfree(pinfo);
+		if (!scmi_pinfo->stats_iomem) {
+			kfree(scmi_pinfo);
 			return -ENOMEM;
 		}
 		stats_signature = readl_relaxed(
-			pinfo->stats_iomem +
+			scmi_pinfo->stats_iomem +
 			offsetof(struct scmi_stats, signature));
-		revision = readl_relaxed(pinfo->stats_iomem +
+		revision = readl_relaxed(scmi_pinfo->stats_iomem +
 					 offsetof(struct scmi_stats,
 						  revision)) & 0xFF;
-		num_clkdom = readl_relaxed(pinfo->stats_iomem +
+		num_clkdom = readl_relaxed(scmi_pinfo->stats_iomem +
 					   offsetof(struct scmi_stats,
 						    num_domains)) & 0xFF;
 		if (stats_signature != 0x50455246) {
 			pr_err("SCMI stats mem signature check failed\n");
-			iounmap(pinfo->stats_iomem);
-			kfree(pinfo);
+			iounmap(scmi_pinfo->stats_iomem);
+			kfree(scmi_pinfo);
 			return -EPERM;
 		}
 		if (revision != 1) {
 			pr_err("SCMI stats revision not supported\n");
-			iounmap(pinfo->stats_iomem);
-			kfree(pinfo);
+			iounmap(scmi_pinfo->stats_iomem);
+			kfree(scmi_pinfo);
 			return -EPERM;
 		}
 		if (!num_clkdom) {
 			pr_err("SCMI cpufreq stats number of clock domains are zero\n");
-			iounmap(pinfo->stats_iomem);
-			kfree(pinfo);
+			iounmap(scmi_pinfo->stats_iomem);
+			kfree(scmi_pinfo);
 			return -EPERM;
 		}
-		pinfo->num_clkdom = num_clkdom;
+		scmi_pinfo->num_clkdom = num_clkdom;
 	} else {
 		pr_err("SCMI cpufreq stats length or base address is zero\n");
 		return -EPERM;
 	}
 	// allocate structures for each clkdom/entry pair
-	pinfo->entries = kcalloc(num_clkdom * ENTRY_MAX,
+	scmi_pinfo->entries = kcalloc(num_clkdom * ENTRY_MAX,
 				 sizeof(struct clkdom_entry), GFP_KERNEL);
-	if (!pinfo->entries) {
-		iounmap(pinfo->stats_iomem);
-		kfree(pinfo);
+	if (!scmi_pinfo->entries) {
+		iounmap(scmi_pinfo->stats_iomem);
+		kfree(scmi_pinfo);
 		return -ENOMEM;
 	}
 	// initialize structures for each clkdom/entry pair
 	for (i = 0; i < num_clkdom; i++) {
 		for (j = 0; j < ENTRY_MAX; j++) {
-			(pinfo->entries + (i * ENTRY_MAX) + j)->entry = j;
-			(pinfo->entries + (i * ENTRY_MAX) + j)->clkdom = i;
+			(scmi_pinfo->entries + (i * ENTRY_MAX) + j)->entry = j;
+			(scmi_pinfo->entries + (i * ENTRY_MAX) + j)->clkdom = i;
 		}
 	}
 
 	// Create the sysfs/debugfs entries
 	if (scmi_cpufreq_stats_create_fs_entries(handle->dev)) {
 		pr_err("Failed to create debugfs entries\n");
-		kfree(pinfo->entries);
-		iounmap(pinfo->stats_iomem);
-		kfree(pinfo);
+		kfree(scmi_pinfo->entries);
+		iounmap(scmi_pinfo->stats_iomem);
+		kfree(scmi_pinfo);
 		return -ENOENT;
 	}
 
@@ -309,29 +309,29 @@ static int qcom_cpufreq_stats_init(struct scmi_handle *handle)
 	// storing them
 	for (i = 0; i < num_clkdom; i++)
 		num_lvl += get_num_opps_for_clkdom(i);
-	pinfo->freq_info =
+	scmi_pinfo->freq_info =
 		kcalloc(num_lvl + num_clkdom, sizeof(u32), GFP_KERNEL);
-	if (!pinfo->freq_info) {
+	if (!scmi_pinfo->freq_info) {
 		pr_err("Failed to allocate memory for freq entries\n");
-		kfree(pinfo->entries);
-		iounmap(pinfo->stats_iomem);
-		kfree(pinfo);
+		kfree(scmi_pinfo->entries);
+		iounmap(scmi_pinfo->stats_iomem);
+		kfree(scmi_pinfo);
 		return -ENOMEM;
 	}
 
 	// Cache the cpufreq values
 	for (i = 0; i < num_clkdom; i++) {
 		// find the no. of freq lvls of all preceding clkdoms
-		pinfo->freq_info[i] = num_clkdom;
+		scmi_pinfo->freq_info[i] = num_clkdom;
 		for (j = 0; j < i; j++)
-			pinfo->freq_info[i] += get_num_opps_for_clkdom(j);
+			scmi_pinfo->freq_info[i] += get_num_opps_for_clkdom(j);
 
 		num_lvl = get_num_opps_for_clkdom(i);
 		if (!num_lvl)
 			continue; // skip this clkdom
 
 		for (j = 0; j < num_lvl; j++) {
-			pinfo->freq_info[pinfo->freq_info[i] + j] =
+			scmi_pinfo->freq_info[scmi_pinfo->freq_info[i] + j] =
 				get_freq_at_idx_for_clkdom(i, j);
 		}
 	}
