@@ -396,6 +396,21 @@ end:
 	return rc;
 }
 
+#if defined(CONFIG_SAMSUNG_PMIC_FLASH)
+int cam_torch_off(struct cam_flash_ctrl *flash_ctrl)
+{
+	if (!flash_ctrl) {
+		CAM_ERR(CAM_FLASH, "Flash control Null");
+		return -EINVAL;
+	}
+
+	if (flash_ctrl->switch_trigger)
+		cam_res_mgr_led_trigger_event(flash_ctrl->switch_trigger,
+			(enum led_brightness)LED_SWITCH_OFF);
+	return 0;
+}
+#endif
+
 #if IS_REACHABLE(CONFIG_LEDS_S2MPB02)
 int cam_flash_off(struct cam_flash_ctrl *flash_ctrl)
 {
@@ -684,21 +699,6 @@ int cam_flash_off(struct cam_flash_ctrl *flash_ctrl)
 			(enum led_brightness)LED_SWITCH_OFF);
 	return 0;
 }
-
-#if defined(CONFIG_SAMSUNG_PMIC_FLASH)
-int cam_torch_off(struct cam_flash_ctrl *flash_ctrl)
-{
-	if (!flash_ctrl) {
-		CAM_ERR(CAM_FLASH, "Flash control Null");
-		return -EINVAL;
-	}
-
-	if (flash_ctrl->switch_trigger)
-		cam_res_mgr_led_trigger_event(flash_ctrl->switch_trigger,
-			(enum led_brightness)LED_SWITCH_OFF);
-	return 0;
-}
-#endif
 
 static int cam_flash_low(
 	struct cam_flash_ctrl *flash_ctrl,

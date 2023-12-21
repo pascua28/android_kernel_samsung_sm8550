@@ -1855,16 +1855,6 @@ static ssize_t rear3_tilt_show(struct device *dev,
 	return 0;
 }
 
-#if defined(CONFIG_SEC_DM1Q_PROJECT) || defined(CONFIG_SEC_DM2Q_PROJECT) || defined(CONFIG_SEC_DM3Q_PROJECT) || defined(CONFIG_SEC_Q5Q_PROJECT)
-static ssize_t rear3_moduleid_show(struct device *dev,
-	struct device_attribute *attr, char *buf)
-{
-	int rc = 0;
-	rc = fill_moduleid_sysfs_node(buf, EEP_REAR3);
-	return rc;
-}
-#endif
-
 static ssize_t rear3_module_info_show(struct device *dev,
 	struct device_attribute *attr, char *buf)
 {
@@ -1884,6 +1874,16 @@ static ssize_t rear3_module_info_store(struct device *dev,
 	scnprintf(module_info[EEP_REAR3], sizeof(module_info[EEP_REAR3]), "%s", buf);
 
 	return size;
+}
+#endif
+
+#if defined(CONFIG_SEC_DM1Q_PROJECT) || defined(CONFIG_SEC_DM2Q_PROJECT) || defined(CONFIG_SEC_DM3Q_PROJECT) || defined(CONFIG_SEC_Q5Q_PROJECT)
+static ssize_t rear3_moduleid_show(struct device *dev,
+	struct device_attribute *attr, char *buf)
+{
+	int rc = 0;
+	rc = fill_moduleid_sysfs_node(buf, EEP_REAR3);
+	return rc;
 }
 #endif
 
@@ -2339,8 +2339,6 @@ static ssize_t rear4_dual_cal_show(struct device *dev,
 {
 	void *ret = NULL;
 	int copy_size = 0;
-
-	pr_debug("[FW_DBG] rear4_dual_cal : %s\n", rear3_dual_cal);
 
 	if (FROM_REAR_DUAL_CAL_SIZE > SYSFS_MAX_READ_SIZE)
 		copy_size = SYSFS_MAX_READ_SIZE;
@@ -3054,10 +3052,6 @@ static DEVICE_ATTR(rear3_dualcal_size, S_IRUGO, rear3_dual_cal_size_show, NULL);
 static DEVICE_ATTR(rear3_tilt, S_IRUGO, rear3_tilt_show, NULL);
 static DEVICE_ATTR(rear3_paf_cal_check, S_IRUGO,
 	rear3_paf_cal_check_show, NULL);
-#if defined(CONFIG_SEC_DM1Q_PROJECT) || defined(CONFIG_SEC_DM2Q_PROJECT) || defined(CONFIG_SEC_DM3Q_PROJECT) || defined(CONFIG_SEC_Q5Q_PROJECT)
-static DEVICE_ATTR(rear3_moduleid, S_IRUGO, rear3_moduleid_show, NULL);
-static DEVICE_ATTR(SVC_rear_module3, S_IRUGO, rear3_moduleid_show, NULL);
-#endif
 #endif
 #if defined(CONFIG_SAMSUNG_REAR_DUAL)
 #if defined(CONFIG_SEC_DM3Q_PROJECT)
@@ -3152,6 +3146,11 @@ static DEVICE_ATTR(rear_otp_bpc5, S_IRUGO, rear_otp_bpc5_show, rear_otp_bpc5_sto
 static DEVICE_ATTR(rear_otp_bpc6, S_IRUGO, rear_otp_bpc6_show, rear_otp_bpc6_store);
 static DEVICE_ATTR(rear_otp_bpc7, S_IRUGO, rear_otp_bpc7_show, rear_otp_bpc7_store);
 static DEVICE_ATTR(rear_otp_bpc8, S_IRUGO, rear_otp_bpc8_show, rear_otp_bpc8_store);
+#endif
+
+#if defined(CONFIG_SEC_DM1Q_PROJECT) || defined(CONFIG_SEC_DM2Q_PROJECT) || defined(CONFIG_SEC_DM3Q_PROJECT) || defined(CONFIG_SEC_Q5Q_PROJECT)
+static DEVICE_ATTR(rear3_moduleid, S_IRUGO, rear3_moduleid_show, NULL);
+static DEVICE_ATTR(SVC_rear_module3, S_IRUGO, rear3_moduleid_show, NULL);
 #endif
 
 #if defined(CONFIG_SAMSUNG_REAR_TRIPLE)
