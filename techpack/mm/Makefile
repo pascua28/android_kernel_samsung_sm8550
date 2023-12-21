@@ -1,7 +1,7 @@
 # SPDX-License-Identifier: GPL-2.0-only
 
 
-MM_ROOT=$(ROOTDIR)display/vendor/qcom/opensource/mm-drivers
+MM_ROOT=$(KERNEL_SRC)/techpack/mm
 KBUILD_OPTIONS := MM_ROOT=$(MM_ROOT)
 
 ifeq ($(TARGET_SUPPORT),genericarmv8)
@@ -10,8 +10,8 @@ endif
 
 
 obj-m += hw_fence/
-obj-m += msm_ext_display/
-obj-m += sync_fence/
+obj-y += msm_ext_display/
+obj-y += sync_fence/
 
 
 all:
