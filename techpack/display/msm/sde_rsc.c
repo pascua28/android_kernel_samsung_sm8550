@@ -984,7 +984,6 @@ int sde_rsc_client_state_update(struct sde_rsc_client *caller_client,
 	}
 
 	pr_debug("state switch successfully complete: %d\n", state);
-	SDE_ATRACE_INT("rsc_state", state);
 	SDE_EVT32(caller_client->id, caller_client->current_state,
 			state, rsc->current_state, SDE_EVTLOG_FUNC_EXIT);
 	rsc->current_state = state;

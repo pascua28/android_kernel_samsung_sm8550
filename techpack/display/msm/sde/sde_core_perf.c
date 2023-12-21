@@ -1562,7 +1562,6 @@ static ssize_t sysfs_sde_core_perf_mode_write(struct device *dev,
 
 	SDE_INFO("performance mode = %d\n", perf_mode);
 	SDE_EVT32(perf_mode, 0x1111);
-	SDE_ATRACE_BEGIN(__func__);
 	if (perf_mode == SDE_PERF_MODE_FIXED) {
 		SDE_INFO("fix performance mode\n");
 	} else if (perf_mode == SDE_PERF_MODE_MINIMUM) {
@@ -1593,7 +1592,6 @@ static ssize_t sysfs_sde_core_perf_mode_write(struct device *dev,
 			/* delay to reset perf until finish bridge RR */
 			vdd->vrr.delayed_perf_normal = true;
 			SDE_INFO("delay normal performance mode\n");
-			SDE_ATRACE_END(__func__);
 			goto out;
 		}
 
@@ -1604,7 +1602,6 @@ static ssize_t sysfs_sde_core_perf_mode_write(struct device *dev,
 	}
 	perf->perf_tune.mode = perf_mode;
 out:
-	SDE_ATRACE_END(__func__);
 	SDE_EVT32(perf_mode, 0x2222);
 	return count;
 }

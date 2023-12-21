@@ -1406,9 +1406,6 @@ static void dsi_kickoff_msg_tx(struct dsi_ctrl *dsi_ctrl,
 	u32 hw_flags = 0;
 	struct dsi_ctrl_hw_ops dsi_hw_ops = dsi_ctrl->hw.ops;
 	struct dsi_split_link_config *split_link;
-#if IS_ENABLED(CONFIG_DISPLAY_SAMSUNG)
-	u8 *tx_buf = (u8 *)msg->tx_buf;
-#endif
 
 	split_link = &(dsi_ctrl->host_config.common_config.split_link);
 
@@ -1456,18 +1453,10 @@ static void dsi_kickoff_msg_tx(struct dsi_ctrl *dsi_ctrl,
 							cmd_mem,
 							hw_flags);
 			} else {
-#if IS_ENABLED(CONFIG_DISPLAY_SAMSUNG)
-				if (tx_buf[0] == 0x2a || tx_buf[0] == 0x2b)
-					SDE_ATRACE_BEGIN("dsi_message_tx_flush");
-#endif
 				dsi_hw_ops.kickoff_command(
 						&dsi_ctrl->hw,
 						cmd_mem,
 						hw_flags);
-#if IS_ENABLED(CONFIG_DISPLAY_SAMSUNG)
-				if (tx_buf[0] == 0x2a || tx_buf[0] == 0x2b)
-					SDE_ATRACE_END("dsi_message_tx_flush");
-#endif
 			}
 		} else if (flags & DSI_CTRL_CMD_FIFO_STORE) {
 			dsi_hw_ops.kickoff_fifo_command(&dsi_ctrl->hw,
@@ -1509,14 +1498,6 @@ static void dsi_kickoff_msg_tx(struct dsi_ctrl *dsi_ctrl,
 					dsi_ctrl->cmd_trigger_line,
 					dsi_ctrl->cmd_trigger_frame);
 		}
-
-
-#if IS_ENABLED(CONFIG_DISPLAY_SAMSUNG)
-		// TODO : this should be called in dsi_ctrl_dma_cmd_wait_for_done()..
-		// but there is no msg struct... fix this later... (CSP3)
-		if (tx_buf[0] == 0x2a || tx_buf[0] == 0x2b)
-			SDE_ATRACE_END("dsi_message_tx_wait");
-#endif
 
 		dsi_hw_ops.reset_cmd_fifo(&dsi_ctrl->hw);
 

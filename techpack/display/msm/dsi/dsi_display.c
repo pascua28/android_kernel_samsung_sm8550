@@ -8862,10 +8862,6 @@ static int dsi_display_qsync(struct dsi_display *display, bool enable)
 	mutex_lock(&display->display_lock);
 	display->queue_cmd_waits = true;
 
-#if IS_ENABLED(CONFIG_DISPLAY_SAMSUNG)
-	SDE_ATRACE_BEGIN(enable ? "qsync_on" : "qsync_off");
-#endif
-
 	display_for_each_ctrl(i, display) {
 		if (enable) {
 			/* send the commands to enable qsync */
@@ -8887,10 +8883,6 @@ static int dsi_display_qsync(struct dsi_display *display, bool enable)
 	}
 
 exit:
-
-#if IS_ENABLED(CONFIG_DISPLAY_SAMSUNG)
-	SDE_ATRACE_END(enable ? "qsync_on" : "qsync_off");
-#endif
 
 	display->queue_cmd_waits = false;
 	SDE_EVT32(enable, display->panel->qsync_caps.qsync_min_fps, rc);

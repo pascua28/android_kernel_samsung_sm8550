@@ -152,7 +152,6 @@ int ss_mafpc_make_img_mass_cmds_FAC(struct samsung_display_driver_data *vdd, cha
 	}
 	/* fill image data */
 
-	SDE_ATRACE_BEGIN("mafpc_mass_cmd_generation");
 	mutex_lock(&vdd->mafpc.vdd_mafpc_lock);
 	for (c_cnt = 0; c_cnt < pcmds->count ; c_cnt++) {
 		tcmds[c_cnt].msg.type = MIPI_DSI_GENERIC_LONG_WRITE;
@@ -182,7 +181,6 @@ int ss_mafpc_make_img_mass_cmds_FAC(struct samsung_display_driver_data *vdd, cha
 		ss_alloc_ss_txbuf(&tcmds[c_cnt], tcmds[c_cnt].ss_txbuf);
 	}
 	mutex_unlock(&vdd->mafpc.vdd_mafpc_lock);
-	SDE_ATRACE_END("mafpc_mass_cmd_generation");
 
 	LCD_INFO(vdd, "Total Cmd Count(%d), Last Cmd Payload Len(%d)\n", c_cnt, tcmds[c_cnt-1].msg.tx_len);
 

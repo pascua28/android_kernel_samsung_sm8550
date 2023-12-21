@@ -305,11 +305,7 @@ static void sde_encoder_phys_cmd_ctl_done_irq(void *arg, int irq_idx)
 	}
 #endif
 
-	SDE_ATRACE_BEGIN("ctl_done_irq");
-
 	_sde_encoder_phys_signal_frame_done(phys_enc);
-
-	SDE_ATRACE_END("ctl_done_irq");
 }
 
 static void sde_encoder_phys_cmd_pp_tx_done_irq(void *arg, int irq_idx)
@@ -319,11 +315,7 @@ static void sde_encoder_phys_cmd_pp_tx_done_irq(void *arg, int irq_idx)
 	if (!phys_enc || !phys_enc->hw_pp)
 		return;
 
-	SDE_ATRACE_BEGIN("pp_done_irq");
-
 	_sde_encoder_phys_signal_frame_done(phys_enc);
-
-	SDE_ATRACE_END("pp_done_irq");
 }
 
 static void sde_encoder_phys_cmd_autorefresh_done_irq(void *arg, int irq_idx)
@@ -409,7 +401,6 @@ static void sde_encoder_phys_cmd_te_rd_ptr_irq(void *arg, int irq_idx)
 	if (!phys_enc || !phys_enc->hw_pp || !phys_enc->hw_intf || !phys_enc->hw_ctl)
 		return;
 
-	SDE_ATRACE_BEGIN("rd_ptr_irq");
 	cmd_enc = to_sde_encoder_phys_cmd(phys_enc);
 	ctl = phys_enc->hw_ctl;
 
@@ -472,7 +463,6 @@ skip_call_handle_vblank_virt:
 
 	atomic_add_unless(&cmd_enc->pending_vblank_cnt, -1, 0);
 	wake_up_all(&cmd_enc->pending_vblank_wq);
-	SDE_ATRACE_END("rd_ptr_irq");
 }
 
 static void sde_encoder_phys_cmd_wr_ptr_irq(void *arg, int irq_idx)
@@ -505,7 +495,6 @@ static void sde_encoder_phys_cmd_wr_ptr_irq(void *arg, int irq_idx)
 	tc_cfg.sync_threshold_start = _get_tearcheck_threshold(phys_enc);
 #endif
 
-	SDE_ATRACE_BEGIN("wr_ptr_irq");
 	ctl = phys_enc->hw_ctl;
 	qsync_mode = sde_connector_get_qsync_mode(phys_enc->connector);
 
@@ -537,7 +526,6 @@ static void sde_encoder_phys_cmd_wr_ptr_irq(void *arg, int irq_idx)
 
 	/* Signal any waiting wr_ptr start interrupt */
 	wake_up_all(&phys_enc->pending_kickoff_wq);
-	SDE_ATRACE_END("wr_ptr_irq");
 }
 
 static void _sde_encoder_phys_cmd_setup_irq_hw_idx(
@@ -1827,7 +1815,6 @@ void ss_qsync_check(struct sde_encoder_phys *phys)
 
 exit:
 	if (update) {
-		SDE_ATRACE_BEGIN((update == 0x1111) ? "start_change" : "start_restore");
 
 		if (phys->has_intf_te && phys->hw_intf->ops.update_start)
 			phys->hw_intf->ops.update_start(phys->hw_intf, &tc_cfg);
@@ -1840,7 +1827,6 @@ exit:
 		SDE_EVT32(DRMID(phys->parent), tc_cfg.start_pos, tc_cfg.sync_threshold_start, update);
 			_sde_encoder_phys_cmd_update_flush_mask(phys);
 		SDE_EVT32_PICK(DRMID(phys->parent), tc_cfg.start_pos, tc_cfg.sync_threshold_start, update);
-		SDE_ATRACE_END((update == 0x1111) ? "start_change" : "start_restore");
 	}
 }
 #endif

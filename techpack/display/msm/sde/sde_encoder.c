@@ -2562,7 +2562,6 @@ static int sde_encoder_resource_control(struct drm_encoder *drm_enc,
 			sw_event != SDE_ENC_RC_EVENT_PRE_STOP))
 		return 0;
 
-	SDE_ATRACE_BEGIN("sde_encoder_resource_control");
 	SDE_DEBUG_ENC(sde_enc, "sw_event:%d, idle_pc:%d\n",
 			sw_event, sde_enc->idle_pc_enabled);
 	SDE_EVT32_VERBOSE(DRMID(drm_enc), sw_event, sde_enc->idle_pc_enabled,
@@ -2602,7 +2601,6 @@ static int sde_encoder_resource_control(struct drm_encoder *drm_enc,
 
 	SDE_EVT32_VERBOSE(DRMID(drm_enc), sw_event, sde_enc->idle_pc_enabled,
 			sde_enc->rc_state, SDE_EVTLOG_FUNC_EXIT);
-	SDE_ATRACE_END("sde_encoder_resource_control");
 	return ret;
 }
 
@@ -3317,9 +3315,7 @@ static void sde_encoder_off_work(struct kthread_work *work)
 	}
 	drm_enc = &sde_enc->base;
 
-	SDE_ATRACE_BEGIN("sde_encoder_off_work");
 	sde_encoder_idle_request(drm_enc);
-	SDE_ATRACE_END("sde_encoder_off_work");
 }
 
 static void sde_encoder_virt_enable(struct drm_encoder *drm_enc)
@@ -3821,7 +3817,6 @@ static void sde_encoder_vblank_callback(struct drm_encoder *drm_enc,
 	if (!drm_enc || !phy_enc || !phy_enc->sde_kms)
 		return;
 
-	SDE_ATRACE_BEGIN("encoder_vblank_callback");
 	sde_enc = to_sde_encoder_virt(drm_enc);
 
 	/*
@@ -3847,7 +3842,6 @@ static void sde_encoder_vblank_callback(struct drm_encoder *drm_enc,
 		sde_encoder_hw_fence_status(phy_enc->sde_kms, sde_enc->crtc, phy_enc->hw_ctl);
 
 	SDE_EVT32(DRMID(drm_enc), ktime_to_us(ts), atomic_read(&phy_enc->vsync_cnt));
-	SDE_ATRACE_END("encoder_vblank_callback");
 }
 
 static void sde_encoder_underrun_callback(struct drm_encoder *drm_enc,
@@ -3857,7 +3851,6 @@ static void sde_encoder_underrun_callback(struct drm_encoder *drm_enc,
 	if (!phy_enc)
 		return;
 
-	SDE_ATRACE_BEGIN("encoder_underrun_callback");
 	atomic_inc(&phy_enc->underrun_cnt);
 	SDE_EVT32(DRMID(drm_enc), atomic_read(&phy_enc->underrun_cnt));
 	if (sde_enc->cur_master &&
@@ -3875,7 +3868,6 @@ static void sde_encoder_underrun_callback(struct drm_encoder *drm_enc,
 	SDE_DBG_CTRL("stop_ftrace");
 	SDE_DBG_CTRL("panic_underrun");
 
-	SDE_ATRACE_END("encoder_underrun_callback");
 }
 
 void sde_encoder_register_vblank_callback(struct drm_encoder *drm_enc,
@@ -4681,10 +4673,8 @@ static void sde_encoder_early_wakeup_work_handler(struct kthread_work *work)
 		return;
 	}
 
-	SDE_ATRACE_BEGIN("encoder_early_wakeup");
 	sde_encoder_resource_control(&sde_enc->base,
 			SDE_ENC_RC_EVENT_EARLY_WAKEUP);
-	SDE_ATRACE_END("encoder_early_wakeup");
 	sde_vm_unlock(sde_kms);
 }
 
@@ -4713,10 +4703,8 @@ void sde_encoder_early_wakeup(struct drm_encoder *drm_enc)
 
 	disp_thread = &priv->disp_thread[sde_enc->crtc->index];
 
-	SDE_ATRACE_BEGIN("queue_early_wakeup_work");
 	kthread_queue_work(&disp_thread->worker,
 				&sde_enc->early_wakeup_work);
-	SDE_ATRACE_END("queue_early_wakeup_work");
 }
 
 int sde_encoder_poll_line_counts(struct drm_encoder *drm_enc)
@@ -5015,7 +5003,6 @@ int sde_encoder_prepare_for_kickoff(struct drm_encoder *drm_enc,
 	_sde_encoder_helper_hdr_plus_mempool_update(sde_enc);
 
 	/* prepare for next kickoff, may include waiting on previous kickoff */
-	SDE_ATRACE_BEGIN("sde_encoder_prepare_for_kickoff");
 	for (i = 0; i < sde_enc->num_phys_encs; i++) {
 		phys = sde_enc->phys_encs[i];
 		params->frame_trigger_mode = sde_enc->frame_trigger_mode;
@@ -5055,7 +5042,6 @@ int sde_encoder_prepare_for_kickoff(struct drm_encoder *drm_enc,
 			needs_hw_reset, is_cmd_mode);
 
 end:
-	SDE_ATRACE_END("sde_encoder_prepare_for_kickoff");
 	return ret;
 }
 
@@ -5070,7 +5056,6 @@ void sde_encoder_kickoff(struct drm_encoder *drm_enc, bool config_changed)
 		SDE_ERROR("invalid encoder\n");
 		return;
 	}
-	SDE_ATRACE_BEGIN("encoder_kickoff");
 	sde_enc = to_sde_encoder_virt(drm_enc);
 
 	SDE_DEBUG_ENC(sde_enc, "\n");
@@ -5111,7 +5096,6 @@ void sde_encoder_kickoff(struct drm_encoder *drm_enc, bool config_changed)
 			!_sde_encoder_is_autorefresh_enabled(sde_enc))
 		_sde_encoder_update_rsc_client(drm_enc, true);
 
-	SDE_ATRACE_END("encoder_kickoff");
 }
 
 void sde_encoder_helper_get_pp_line_count(struct drm_encoder *drm_enc,
@@ -6029,9 +6013,7 @@ int sde_encoder_wait_for_event(struct drm_encoder *drm_enc,
 		if (phys && fn_wait) {
 			snprintf(atrace_buf, sizeof(atrace_buf),
 				"wait_completion_event_%d", event);
-			SDE_ATRACE_BEGIN(atrace_buf);
 			ret = fn_wait(phys);
-			SDE_ATRACE_END(atrace_buf);
 			if (ret) {
 				SDE_ERROR_ENC(sde_enc, "intf_type:%d, event:%d i:%d, failed:%d\n",
 						sde_enc->disp_info.intf_type, event, i, ret);

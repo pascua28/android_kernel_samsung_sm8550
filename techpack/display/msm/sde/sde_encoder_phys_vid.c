@@ -541,8 +541,6 @@ static void sde_encoder_phys_vid_vblank_irq(void *arg, int irq_idx)
 	}
 #endif
 
-	SDE_ATRACE_BEGIN("vblank_irq");
-
 	/*
 	 * only decrement the pending flush count if we've actually flushed
 	 * hardware. due to sw irq latency, vblank may have already happened
@@ -600,7 +598,6 @@ not_flushed:
 
 	/* Signal any waiting atomic commit thread */
 	wake_up_all(&phys_enc->pending_kickoff_wq);
-	SDE_ATRACE_END("vblank_irq");
 }
 
 #if defined(CONFIG_SECDP)

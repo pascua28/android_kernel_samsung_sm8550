@@ -321,7 +321,6 @@ static int _sde_power_data_bus_set_quota(
 	pdbus->in_ib_quota = in_ib_quota;
 #endif
 
-	SDE_ATRACE_BEGIN("msm_bus_scale_req");
 	for (i = 0; i < paths; i++) {
 		if (pdbus->data_bus_hdl[i]) {
 			rc = icc_set_bw(pdbus->data_bus_hdl[i],
@@ -335,8 +334,6 @@ static int _sde_power_data_bus_set_quota(
 	pdbus->curr_val.ab = in_ab_quota;
 	pdbus->curr_val.ib = in_ib_quota;
 
-	SDE_ATRACE_END("msm_bus_scale_req");
-
 	return rc;
 err:
 	for (; i >= 0; --i)
@@ -345,7 +342,6 @@ err:
 				   Bps_to_icc(pdbus->curr_val.ab),
 				   Bps_to_icc(pdbus->curr_val.ib));
 
-	SDE_ATRACE_END("msm_bus_scale_req");
 	pr_err("failed to set data bus vote ab=%llu ib=%llu rc=%d\n",
 			in_ab_quota, in_ib_quota, rc);
 
@@ -570,10 +566,8 @@ static int sde_power_reg_bus_update(struct sde_power_reg_bus_handle *reg_bus,
 	ib_quota = reg_bus->scale_table[usecase_ndx].ib;
 
 	if (reg_bus->reg_bus_hdl) {
-		SDE_ATRACE_BEGIN("msm_bus_scale_req");
 		rc = icc_set_bw(reg_bus->reg_bus_hdl, Bps_to_icc(ab_quota),
 				Bps_to_icc(ib_quota));
-		SDE_ATRACE_END("msm_bus_scale_req");
 	}
 
 	if (rc)
@@ -823,9 +817,7 @@ static void sde_power_mmrm_reserve(struct sde_power_handle *phandle)
 			mp->clk_config[i].mmrm.flags =
 				MMRM_CLIENT_DATA_FLAG_RESERVE_ONLY;
 
-			SDE_ATRACE_BEGIN("sde_clk_set_rate");
 			msm_dss_single_clk_set_rate(&mp->clk_config[i]);
-			SDE_ATRACE_END("sde_clk_set_rate");
 			break;
 		}
 	}
@@ -869,8 +861,6 @@ int sde_power_resource_enable(struct sde_power_handle *phandle, bool enable)
 	mutex_lock(&phandle->phandle_lock);
 
 	pr_debug("enable:%d\n", enable);
-
-	SDE_ATRACE_BEGIN("sde_power_resource_enable");
 
 	/* RSC client init */
 	sde_power_rsc_client_init(phandle);
@@ -947,7 +937,6 @@ int sde_power_resource_enable(struct sde_power_handle *phandle, bool enable)
 	}
 
 	SDE_EVT32_VERBOSE(enable, SDE_EVTLOG_FUNC_EXIT);
-	SDE_ATRACE_END("sde_power_resource_enable");
 	mutex_unlock(&phandle->phandle_lock);
 	return rc;
 
@@ -963,7 +952,6 @@ vreg_err:
 			&phandle->data_bus_handle[i],
 			SDE_POWER_HANDLE_DISABLE_BUS_AB_QUOTA,
 			SDE_POWER_HANDLE_DISABLE_BUS_IB_QUOTA);
-	SDE_ATRACE_END("sde_power_resource_enable");
 	mutex_unlock(&phandle->phandle_lock);
 	return rc;
 }
@@ -1030,9 +1018,7 @@ int sde_power_clk_set_rate(struct sde_power_handle *phandle, char *clock_name,
 			pr_debug("set rate clk:%s rate:%lu flags:0x%x\n",
 				clock_name, rate, flags);
 
-			SDE_ATRACE_BEGIN("sde_clk_set_rate");
 			rc = msm_dss_single_clk_set_rate(&mp->clk_config[i]);
-			SDE_ATRACE_END("sde_clk_set_rate");
 			break;
 		}
 	}

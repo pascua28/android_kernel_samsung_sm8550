@@ -1586,7 +1586,6 @@ static void sde_encoder_phys_wb_ctl_start_irq(void *arg, int irq_idx)
 	if (!wb_enc)
 		return;
 
-	SDE_ATRACE_BEGIN("ctl_start_irq");
 	phys_enc = &wb_enc->base;
 	if (atomic_add_unless(&phys_enc->pending_ctl_start_cnt, -1, 0))
 		wake_up_all(&phys_enc->pending_kickoff_wq);
@@ -1595,7 +1594,6 @@ static void sde_encoder_phys_wb_ctl_start_irq(void *arg, int irq_idx)
 	if (hw_wb->ops.get_line_count)
 		line_cnt = hw_wb->ops.get_line_count(hw_wb);
 
-	SDE_ATRACE_END("ctl_start_irq");
 	SDE_EVT32_IRQ(DRMID(phys_enc->parent), WBID(wb_enc), line_cnt);
 }
 
@@ -1669,9 +1667,7 @@ static void sde_encoder_phys_cwb_ovflow(void *arg, int irq_idx)
  */
 static void sde_encoder_phys_wb_done_irq(void *arg, int irq_idx)
 {
-	SDE_ATRACE_BEGIN("wb_done_irq");
 	_sde_encoder_phys_wb_frame_done_helper(arg, false);
-	SDE_ATRACE_END("wb_done_irq");
 }
 
 static void sde_encoder_phys_wb_lineptr_irq(void *arg, int irq_idx)
@@ -1684,7 +1680,6 @@ static void sde_encoder_phys_wb_lineptr_irq(void *arg, int irq_idx)
 	if (!wb_enc || !wb_enc->prog_line)
 		return;
 
-	SDE_ATRACE_BEGIN("wb_lineptr_irq");
 	phys_enc = &wb_enc->base;
 	if (phys_enc->parent_ops.handle_frame_done &&
 			atomic_add_unless(&phys_enc->pending_retire_fence_cnt, -1, 0)) {
@@ -1696,7 +1691,6 @@ static void sde_encoder_phys_wb_lineptr_irq(void *arg, int irq_idx)
 	if (hw_wb->ops.get_line_count)
 		line_cnt = hw_wb->ops.get_line_count(hw_wb);
 
-	SDE_ATRACE_END("wb_lineptr_irq");
 	SDE_EVT32_IRQ(DRMID(phys_enc->parent), WBID(wb_enc), event, wb_enc->prog_line, line_cnt);
 }
 

@@ -77,8 +77,6 @@
 
 #define DEMURA_REGION_NAME_MAX      32
 
-EXPORT_TRACEPOINT_SYMBOL(tracing_mark_write);
-
 static const char * const iommu_ports[] = {
 		"mdp_0",
 };
@@ -1288,7 +1286,6 @@ static void sde_kms_prepare_commit(struct msm_kms *kms,
 		return;
 	priv = dev->dev_private;
 
-	SDE_ATRACE_BEGIN("prepare_commit");
 	rc = pm_runtime_resume_and_get(sde_kms->dev->dev);
 	if (rc < 0) {
 		SDE_ERROR("failed to enable power resources %d\n", rc);
@@ -1329,7 +1326,7 @@ static void sde_kms_prepare_commit(struct msm_kms *kms,
 end_vm:
 	_sde_kms_drm_check_dpms(state, true);
 end:
-	SDE_ATRACE_END("prepare_commit");
+	return;
 }
 
 static void sde_kms_commit(struct msm_kms *kms,
@@ -1349,15 +1346,12 @@ static void sde_kms_commit(struct msm_kms *kms,
 		return;
 	}
 
-	SDE_ATRACE_BEGIN("sde_kms_commit");
 	for_each_old_crtc_in_state(old_state, crtc, old_crtc_state, i) {
 		if (crtc->state->active) {
 			SDE_EVT32(DRMID(crtc), old_state);
 			sde_crtc_commit_kickoff(crtc, old_crtc_state);
 		}
 	}
-
-	SDE_ATRACE_END("sde_kms_commit");
 }
 
 static void _sde_kms_free_splash_display_data(struct sde_kms *sde_kms,
@@ -1630,8 +1624,6 @@ static void sde_kms_complete_commit(struct msm_kms *kms,
 		return;
 	}
 
-	SDE_ATRACE_BEGIN("sde_kms_complete_commit");
-
 	for_each_old_crtc_in_state(old_state, crtc, old_crtc_state, i) {
 		sde_crtc_complete_commit(crtc, old_crtc_state);
 
@@ -1674,7 +1666,6 @@ static void sde_kms_complete_commit(struct msm_kms *kms,
 		_sde_kms_release_splash_resource(sde_kms, crtc);
 
 	SDE_EVT32_VERBOSE(SDE_EVTLOG_FUNC_EXIT);
-	SDE_ATRACE_END("sde_kms_complete_commit");
 }
 
 static void sde_kms_wait_for_commit_done(struct msm_kms *kms,
@@ -1710,7 +1701,6 @@ static void sde_kms_wait_for_commit_done(struct msm_kms *kms,
 		return;
 	}
 
-	SDE_ATRACE_BEGIN("sde_kms_wait_for_commit_done");
 	list_for_each_entry(encoder, &dev->mode_config.encoder_list, head) {
 		cwb_disabling = false;
 		if (encoder->crtc != crtc) {
@@ -1757,8 +1747,6 @@ static void sde_kms_wait_for_commit_done(struct msm_kms *kms,
 	/* avoid system cache update to set rd-noalloc bit when NSE feature is enabled */
 	if (!test_bit(SDE_FEATURE_SYS_CACHE_NSE, sde_kms->catalog->features))
 		sde_crtc_static_cache_read_kickoff(crtc);
-
-	SDE_ATRACE_END("sde_kms_wait_for_commit_done");
 }
 
 static void sde_kms_prepare_fence(struct msm_kms *kms,
@@ -1773,15 +1761,11 @@ static void sde_kms_prepare_fence(struct msm_kms *kms,
 		return;
 	}
 
-	SDE_ATRACE_BEGIN("sde_kms_prepare_fence");
-
 	/* old_state actually contains updated crtc pointers */
 	for_each_old_crtc_in_state(old_state, crtc, old_crtc_state, i) {
 		if (crtc->state->active || crtc->state->active_changed)
 			sde_crtc_prepare_commit(crtc, old_crtc_state);
 	}
-
-	SDE_ATRACE_END("sde_kms_prepare_fence");
 }
 
 /**
@@ -3345,7 +3329,6 @@ static int sde_kms_atomic_check(struct msm_kms *kms,
 	sde_kms = to_sde_kms(kms);
 	dev = sde_kms->dev;
 
-	SDE_ATRACE_BEGIN("atomic_check");
 	if (sde_kms_is_suspend_blocked(dev)) {
 		SDE_DEBUG("suspended, skip atomic_check\n");
 		ret = -EBUSY;
@@ -3382,7 +3365,6 @@ static int sde_kms_atomic_check(struct msm_kms *kms,
 vm_clean_up:
 	sde_kms_vm_res_release(kms, state);
 end:
-	SDE_ATRACE_END("atomic_check");
 	return ret;
 }
 

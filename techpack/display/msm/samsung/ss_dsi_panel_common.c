@@ -8853,7 +8853,6 @@ __visible_for_testing int ss_panel_vrr_switch(struct vrr_info *vrr)
 	vrr->check_vsync = CHECK_VSYNC_COUNT;
 
 	snprintf(trace_name, 128, "VRR: %d->%d", cur_rr, adjusted_rr);
-	SDE_ATRACE_BEGIN(trace_name);
 	LCD_INFO(vdd, "+++ VRR: %d%s -> %d%s\n",
 			cur_rr, cur_hs ? (cur_phs ? "PHS" : "HS") : "NM",
 			adjusted_rr, adjusted_hs ?  (adjusted_phs ? "PHS" : "HS") : "NM");
@@ -9130,7 +9129,6 @@ vrr_end:
 	vrr->running_vrr = false;
 
 	LCD_INFO(vdd, "--- VRR\n");
-	SDE_ATRACE_END(trace_name);
 
 	mutex_unlock(&vrr->vrr_lock);
 

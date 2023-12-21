@@ -114,26 +114,6 @@ TRACE_EVENT(sde_encoder_underrun,
 		__entry->underrun_cnt)
 );
 
-TRACE_EVENT(tracing_mark_write,
-	TP_PROTO(char trace_type, const struct task_struct *task,
-		const char *name, int value),
-	TP_ARGS(trace_type, task, name, value),
-	TP_STRUCT__entry(
-			__field(char, trace_type)
-			__field(int, pid)
-			__string(trace_name, name)
-			__field(int, value)
-	),
-	TP_fast_assign(
-			__entry->trace_type = trace_type;
-			__entry->pid = task ? task->tgid : 0;
-			__assign_str(trace_name, name);
-			__entry->value = value;
-	),
-	TP_printk("%c|%d|%s|%d", __entry->trace_type,
-			__entry->pid, __get_str(trace_name), __entry->value)
-)
-
 #define SDE_TRACE_EVTLOG_SIZE	15
 TRACE_EVENT(sde_evtlog,
 	TP_PROTO(const char *tag, u32 tag_id, u32 cnt, u32 *data),

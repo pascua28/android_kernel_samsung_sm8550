@@ -202,7 +202,6 @@ void make_mass_self_display_img_cmds_HAE(struct samsung_display_driver_data *vdd
 	ss_alloc_ss_txbuf(&tcmds[0], tcmds[0].ss_txbuf);
 	
 	/* fill image data */
-	SDE_ATRACE_BEGIN("mass_cmd_generation");
 	for (c_cnt = 1; c_cnt < pcmds->count ; c_cnt++) {
 		tcmds[c_cnt].msg.type = MIPI_DSI_GENERIC_LONG_WRITE;
 		tcmds[c_cnt].last_command = 1;
@@ -250,8 +249,6 @@ void make_mass_self_display_img_cmds_HAE(struct samsung_display_driver_data *vdd
 	vdd->self_disp.operation[op].img_checksum_cal |= ((check_sum_2 & 0xFF) << 8);
 	vdd->self_disp.operation[op].img_checksum_cal |= ((check_sum_1 & 0xFF) << 16);
 	vdd->self_disp.operation[op].img_checksum_cal |= ((check_sum_0 & 0xFF) << 24);
-
-	SDE_ATRACE_END("mass_cmd_generation");
 
 	LCD_INFO(vdd, "Total Cmd Count(%d), Last Cmd Payload Len(%d)\n", c_cnt, tcmds[c_cnt-1].msg.tx_len);
 

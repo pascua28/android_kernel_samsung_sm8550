@@ -2860,8 +2860,6 @@ void sde_crtc_prepare_commit(struct drm_crtc *crtc,
 	cstate = to_sde_crtc_state(crtc->state);
 	SDE_EVT32_VERBOSE(DRMID(crtc), cstate->cwb_enc_mask);
 
-	SDE_ATRACE_BEGIN("sde_crtc_prepare_commit");
-
 	/* identify connectors attached to this crtc */
 	cstate->num_connectors = 0;
 
@@ -2884,7 +2882,6 @@ void sde_crtc_prepare_commit(struct drm_crtc *crtc,
 
 	/* prepare main output fence */
 	sde_fence_prepare(sde_crtc->output_fence);
-	SDE_ATRACE_END("sde_crtc_prepare_commit");
 }
 
 /**
@@ -3033,10 +3030,7 @@ static void _sde_crtc_retire_event(struct drm_connector *connector,
 		SDE_ERROR("invalid param\n");
 		return;
 	}
-
-	SDE_ATRACE_BEGIN("signal_retire_fence");
 	sde_connector_complete_commit(connector, ts, fence_event);
-	SDE_ATRACE_END("signal_retire_fence");
 }
 
 void sde_crtc_opr_event_notify(struct drm_crtc *crtc)
@@ -3120,7 +3114,6 @@ static void sde_crtc_frame_event_work(struct kthread_work *work)
 		return;
 	}
 	priv = sde_kms->dev->dev_private;
-	SDE_ATRACE_BEGIN("crtc_frame_event");
 
 	SDE_DEBUG("crtc%d event:%u ts:%lld\n", crtc->base.id, fevent->event,
 			ktime_to_ns(fevent->ts));
@@ -3134,10 +3127,8 @@ static void sde_crtc_frame_event_work(struct kthread_work *work)
 					| SDE_ENCODER_FRAME_EVENT_PANEL_DEAD
 					| SDE_ENCODER_FRAME_EVENT_DONE))) {
 
-		SDE_ATRACE_BEGIN("crtc_frame_event_runtime");
 		SDE_EVT32(0xEEEEEEEE);
 		ret = pm_runtime_resume_and_get(crtc->dev->dev);
-		SDE_ATRACE_END("crtc_frame_event_runtime");
 		if (ret < 0) {
 			SDE_ERROR("failed to enable power resource %d\n", ret);
 			SDE_EVT32(ret, SDE_EVTLOG_ERROR);
@@ -3162,9 +3153,7 @@ static void sde_crtc_frame_event_work(struct kthread_work *work)
 					ktime_to_ns(fevent->ts));
 			SDE_EVT32(DRMID(crtc), fevent->event,
 							SDE_EVTLOG_FUNC_CASE2);
-			SDE_ATRACE_BEGIN("crtc_frame_event_bw");
 			sde_core_perf_crtc_release_bw(crtc);
-			SDE_ATRACE_END("crtc_frame_event_bw");
 		} else {
 			SDE_EVT32_VERBOSE(DRMID(crtc), fevent->event,
 							SDE_EVTLOG_FUNC_CASE3);
@@ -3172,12 +3161,10 @@ static void sde_crtc_frame_event_work(struct kthread_work *work)
 	}
 
 	if (fevent->event & SDE_ENCODER_FRAME_EVENT_SIGNAL_RELEASE_FENCE) {
-		SDE_ATRACE_BEGIN("signal_release_fence");
 		sde_fence_signal(sde_crtc->output_fence, fevent->ts,
 				(fevent->event & SDE_ENCODER_FRAME_EVENT_ERROR)
 				? SDE_FENCE_SIGNAL_ERROR : SDE_FENCE_SIGNAL, NULL);
 		_sde_crtc_frame_done_notify(crtc, fevent);
-		SDE_ATRACE_END("signal_release_fence");
 	}
 
 	if (fevent->event & SDE_ENCODER_FRAME_EVENT_SIGNAL_RETIRE_FENCE) {
@@ -3199,7 +3186,6 @@ static void sde_crtc_frame_event_work(struct kthread_work *work)
 	spin_lock_irqsave(&sde_crtc->fevent_spin_lock, flags);
 	list_add_tail(&fevent->list, &sde_crtc->frame_event_list);
 	spin_unlock_irqrestore(&sde_crtc->fevent_spin_lock, flags);
-	SDE_ATRACE_END("crtc_frame_event");
 }
 
 void sde_crtc_complete_commit(struct drm_crtc *crtc,
@@ -3925,8 +3911,6 @@ static bool _sde_crtc_wait_for_fences(struct drm_crtc *crtc)
 	}
 	hw_ctl = _sde_crtc_get_hw_ctl(crtc);
 
-	SDE_ATRACE_BEGIN("plane_wait_input_fence");
-
 	/* if this is the last frame on vm transition, disable hw fences */
 	vm_req = sde_crtc_get_property(to_sde_crtc_state(crtc->state), CRTC_PROP_VM_REQ_STATE);
 	if (vm_req == VM_REQ_RELEASE)
@@ -3972,8 +3956,6 @@ static bool _sde_crtc_wait_for_fences(struct drm_crtc *crtc)
 	if (ipcc_input_signal_wait && !num_hw_fences && hw_ctl->ops.hw_fence_trigger_sw_override &&
 			!test_bit(HW_FENCE_IN_FENCES_NO_OVERRIDE, sde_crtc->hwfence_features_mask))
 		hw_ctl->ops.hw_fence_trigger_sw_override(hw_ctl);
-
-	SDE_ATRACE_END("plane_wait_input_fence");
 
 	return num_hw_fences ? true : false;
 }
@@ -4187,7 +4169,6 @@ static void _sde_crtc_atomic_begin(struct drm_crtc *crtc,
 	if (!sde_kms)
 		return;
 
-	SDE_ATRACE_BEGIN("crtc_atomic_begin");
 	SDE_DEBUG("crtc%d\n", crtc->base.id);
 
 	sde_crtc = to_sde_crtc(crtc);
@@ -4259,7 +4240,7 @@ static void _sde_crtc_atomic_begin(struct drm_crtc *crtc,
 	 */
 
 end:
-	SDE_ATRACE_END("crtc_atomic_begin");
+	return;
 }
 
 #if (LINUX_VERSION_CODE >= KERNEL_VERSION(5, 15, 0))
@@ -4358,8 +4339,6 @@ static void sde_crtc_atomic_flush_common(struct drm_crtc *crtc,
 	if (unlikely(!sde_crtc->num_mixers))
 		return;
 
-	SDE_ATRACE_BEGIN("sde_crtc_atomic_flush");
-
 	/*
 	 * For planes without commit update, drm framework will not add
 	 * those planes to current state since hardware update is not
@@ -4407,7 +4386,6 @@ static void sde_crtc_atomic_flush_common(struct drm_crtc *crtc,
 	}
 
 	/* Kickoff will be scheduled by outer layer */
-	SDE_ATRACE_END("sde_crtc_atomic_flush");
 }
 
 #if (LINUX_VERSION_CODE >= KERNEL_VERSION(5, 15, 0))
@@ -4688,11 +4666,9 @@ void ss_dfps_control(struct drm_crtc *crtc)
 						display->panel->dfps_caps.type 	== DSI_DFPS_IMMEDIATE_VFP) {
 						vdd = (struct samsung_display_driver_data *)display->panel->panel_private;
 
-						SDE_ATRACE_BEGIN("ss_dfps_control");
 						if (vdd && vdd->panel_func.samsung_dfps_panel_update)
 							vdd->panel_func.samsung_dfps_panel_update(vdd,
 										c_bridge->dsi_mode.timing.refresh_rate);
-						SDE_ATRACE_END("ss_dfps_control");
 
 					}
 					SDE_DEBUG("crtc%d fps : %d\n", crtc->base.id, c_bridge->dsi_mode.timing.refresh_rate);
@@ -4744,8 +4720,6 @@ void sde_crtc_commit_kickoff(struct drm_crtc *crtc,
 	if (unlikely(!sde_crtc->num_mixers))
 		return;
 
-	SDE_ATRACE_BEGIN("crtc_commit");
-
 	idle_pc_state = sde_crtc_get_property(cstate, CRTC_PROP_IDLE_PC_STATE);
 
 	sde_crtc->kickoff_in_progress = true;
@@ -4785,9 +4759,7 @@ void sde_crtc_commit_kickoff(struct drm_crtc *crtc,
 	}
 
 	sde_crtc_calc_fps(sde_crtc);
-	SDE_ATRACE_BEGIN("flush_event_thread");
 	_sde_crtc_flush_frame_events(crtc);
-	SDE_ATRACE_END("flush_event_thread");
 	sde_crtc->plane_mask_old = crtc->state->plane_mask;
 
 	if (atomic_inc_return(&sde_crtc->frame_pending) == 1) {
@@ -4835,8 +4807,6 @@ void sde_crtc_commit_kickoff(struct drm_crtc *crtc,
 		sde_crtc->event = crtc->state->event;
 		spin_unlock_irqrestore(&dev->event_lock, flags);
 	}
-
-	SDE_ATRACE_END("crtc_commit");
 }
 
 /**
@@ -6836,7 +6806,6 @@ static int sde_crtc_atomic_set_property(struct drm_crtc *crtc,
 	sde_crtc = to_sde_crtc(crtc);
 	cstate = to_sde_crtc_state(state);
 
-	SDE_ATRACE_BEGIN("sde_crtc_atomic_set_property");
 	/* check with cp property system first */
 	ret = sde_cp_crtc_set_property(crtc, state, property, val);
 	if (ret != -ENOENT)
@@ -6942,8 +6911,6 @@ exit:
 		SDE_DEBUG("%s: %s[%d] <= 0x%llx\n", crtc->name, property->name,
 				property->base.id, val);
 	}
-
-	SDE_ATRACE_END("sde_crtc_atomic_set_property");
 	return ret;
 }
 
