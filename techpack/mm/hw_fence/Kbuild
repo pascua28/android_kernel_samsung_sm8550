@@ -1,7 +1,6 @@
 # SPDX-License-Identifier: GPL-2.0-only
 
-KDIR := $(TOP)/kernel_platform/msm-kernel
-MSM_HW_FENCE_ROOT=$(ROOTDIR)display/vendor/qcom/opensource/mm-drivers
+MSM_HW_FENCE_ROOT=$(KERNEL_SRC)/techpack/mm
 include $(MSM_HW_FENCE_ROOT)/config/kalamammdrivers.conf
 
 LINUXINCLUDE += -include $(MSM_HW_FENCE_ROOT)/config/kalamammdriversconf.h \
