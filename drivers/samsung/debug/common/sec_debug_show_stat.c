@@ -155,34 +155,6 @@ static void __debug_show_cpu_stat(void)
 				nsec_to_clock_t(guest_nice));
 	}
 
-#if IS_BUILTIN(CONFIG_SEC_DEBUG)
-	pr_info(" ---------------------------------------------------------------------------------------\n");
-	pr_info("intr %llu\n", (unsigned long long)sum);
-
-	/* sum again ? it could be updated? */
-	for_each_irq_nr(j)
-		if (kstat_irqs(j))
-			pr_info(" irq-%d : %u\n", j, kstat_irqs(j));
-
-	pr_info(" ---------------------------------------------------------------------------------------\n");
-	pr_info("\nctxt %llu\n"
-		"btime %llu\n"
-		"processes %lu\n"
-		"procs_running %lu\n"
-		"procs_blocked %lu\n",
-		nr_context_switches(),
-		(unsigned long long)boottime.tv_sec,
-		total_forks,
-		nr_running(),
-		nr_iowait());
-
-	pr_info(" ---------------------------------------------------------------------------------------\n");
-	pr_info("softirq %llu\n", (unsigned long long)sum_softirq);
-
-	for (i = 0; i < NR_SOFTIRQS; i++)
-		pr_info(" softirq-%d : %u\n", i, per_softirq_sums[i]);
-#endif
-
 	pr_info("\n");
 
 	pr_info(" ---------------------------------------------------------------------------------------\n");
