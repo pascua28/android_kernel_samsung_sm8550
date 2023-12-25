@@ -77,7 +77,7 @@ extern struct module_attribute module_uevent;
 extern int init_module(void);
 extern void cleanup_module(void);
 
-#if !defined(MODULE) || defined(CONFIG_INTEGRATE_MODULES)
+#ifndef MODULE
 /**
  * module_init() - driver initialization entry point
  * @x: function to be run at kernel boot time or module insertion
@@ -86,20 +86,7 @@ extern void cleanup_module(void);
  * builtin) or at module insertion time (if a module).  There can only
  * be one per module.
  */
-#ifdef MODULE
-/*
- * Place integrated module initcall entries into the .rodata section. Integrated
- * modules intentionally lack unique initcall names so that name collisions will
- * produce linker errors.
- */
-#define module_init(x) \
-	____define_initcall(x,						\
-		__initcall_stub(x, __KBUILD_MODNAME,),			\
-		__PASTE(__initcall__, __PASTE(__KBUILD_MODNAME, __)),	\
-		".rodata")
-#else
 #define module_init(x)	__initcall(x);
-#endif
 
 /**
  * module_exit() - driver exit entry point
@@ -113,9 +100,8 @@ extern void cleanup_module(void);
  */
 #define module_exit(x)	__exitcall(x);
 
-#endif /* !MODULE || CONFIG_INTEGRATE_MODULES */
+#else /* MODULE */
 
-#ifdef MODULE
 /*
  * In most cases loadable modules do not need custom
  * initcall levels. There are still some valid cases where
@@ -141,7 +127,6 @@ extern void cleanup_module(void);
 
 #define console_initcall(fn)		module_init(fn)
 
-#ifndef CONFIG_INTEGRATE_MODULES
 /* Each module must use one module_init(). */
 #define module_init(initfn)					\
 	static inline initcall_t __maybe_unused __inittest(void)		\
@@ -158,12 +143,11 @@ extern void cleanup_module(void);
 		__attribute__((alias(#exitfn)));		\
 	__CFI_ADDRESSABLE(cleanup_module, __exitdata);
 
-#endif /* !CONFIG_INTEGRATE_MODULES */
-#endif /* MODULE */
+#endif
 
 /* This means "can be init if no module support, otherwise module load
    may call it." */
-#if defined(CONFIG_MODULES) || defined(CONFIG_INTEGRATE_MODULES)
+#ifdef CONFIG_MODULES
 #define __init_or_module
 #define __initdata_or_module
 #define __initconst_or_module
@@ -255,12 +239,12 @@ extern void cleanup_module(void);
 /* What your module does. */
 #define MODULE_DESCRIPTION(_description) MODULE_INFO(description, _description)
 
-#if defined(MODULE) && !defined(CONFIG_INTEGRATE_MODULES)
+#ifdef MODULE
 /* Creates an alias so file2alias.c can find device table. */
 #define MODULE_DEVICE_TABLE(type, name)					\
 extern typeof(name) __mod_##type##__##name##_device_table		\
   __attribute__ ((unused, alias(__stringify(name))))
-#else  /* !MODULE || CONFIG_INTEGRATE_MODULES */
+#else  /* !MODULE */
 #define MODULE_DEVICE_TABLE(type, name)
 #endif
 
