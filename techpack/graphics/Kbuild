@@ -6,7 +6,7 @@ endif
 
 # If we're not in an Android tree, select KGSL config
 ifeq ($(ANDROID_BUILD_TOP),)
-CONFIG_QCOM_KGSL = m
+CONFIG_QCOM_KGSL = y
 endif
 
 ifeq ($(CONFIG_ARCH_WAIPIO), y)

@@ -5,11 +5,11 @@ LOCAL_PATH := $(call my-dir)
 # Build/Package only in case of supported target
 ifeq ($(call is-board-platform-in-list,taro kalama bengal crow kona), true)
 
-BT_SELECT := CONFIG_MSM_BT_POWER=m
+BT_SELECT := CONFIG_MSM_BT_POWER=y
 #ifdef CONFIG_SLIMBUS
-BT_SELECT += CONFIG_BTFM_SLIM=m
+BT_SELECT += CONFIG_BTFM_SLIM=y
 #endif
-BT_SELECT += CONFIG_I2C_RTC6226_QCA=m
+BT_SELECT += CONFIG_I2C_RTC6226_QCA=y
 ifeq ($(TARGET_KERNEL_DLKM_SECURE_MSM_OVERRIDE), true)
 ifeq ($(ENABLE_PERIPHERAL_STATE_UTILS), true)
 BT_SELECT += CONFIG_BT_HW_SECURE_DISABLE=y

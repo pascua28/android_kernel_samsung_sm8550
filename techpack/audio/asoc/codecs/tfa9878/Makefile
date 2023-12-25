@@ -75,9 +75,9 @@ endif
 
 ifdef TFA_KERNEL_MODULE
 # module driver
-obj-m   := snd-soc-tfa98xx.o
+obj-y   := snd-soc-tfa98xx.o
 ifdef TFA_USE_TFA_CLASS
-obj-m   += snd-soc-tfa_sysfs.o
+obj-y   += snd-soc-tfa_sysfs.o
 endif
 else
 # built-in driver

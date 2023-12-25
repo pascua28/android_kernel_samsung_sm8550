@@ -1,5 +1,5 @@
 
-obj-m += mmrm_vm_fe_test.o
+obj-y += mmrm_vm_fe_test.o
 
 ifeq ($(CONFIG_ARCH_KALAMA), y)
 ifeq ($(CONFIG_ARCH_QTI_VM), y)

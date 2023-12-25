@@ -9,7 +9,7 @@ ifeq ($(TARGET_SUPPORT),genericarmv8)
 endif
 
 
-obj-m += hw_fence/
+obj-y += hw_fence/
 obj-y += msm_ext_display/
 obj-y += sync_fence/
 

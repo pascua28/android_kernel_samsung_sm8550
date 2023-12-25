@@ -7,7 +7,7 @@ AUDIO_SELECT  := CONFIG_SND_SOC_WAIPIO=m
 endif
 
 ifeq ($(call is-board-platform, kalama crow),true)
-AUDIO_SELECT  := CONFIG_SND_SOC_KALAMA=m
+AUDIO_SELECT  := CONFIG_SND_SOC_KALAMA=y
 endif
 
 ifeq ($(call is-board-platform, bengal),true)
