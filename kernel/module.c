@@ -3603,6 +3603,18 @@ static const __initconst char * const blacklist[] = {
 	"rimps_log",
 	"qcom_edac",
 	"msm_lmh_dcvs",
+	"coresight_tmc",
+	"coresight_hwevent",
+	"coresight_stm",
+	"coresight_cti",
+	"coresight_funnel",
+	"coresight_remote_etm",
+	"coresight_tpda",
+	"coresight_dummy",
+	"coresight_csr",
+	"coresight_tpdm",
+	"coresight_replicator",
+	"coresight_tgu",
 
 	NULL
 };
