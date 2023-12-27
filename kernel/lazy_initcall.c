@@ -50,6 +50,19 @@ static const __initconst char * const blacklist[] = {
  * Add them here.
  */
 static const __initconst char * const deferred_list[] = {
+	"msm_kgsl",
+	"msm_video",
+	"qnoc_crow",
+	"qnoc_kalama",
+	"qnoc_qos",
+	"icc_rpmh",
+	"icc_debug",
+	"icc_bcm_voter",
+	"ssg",
+        "blk_sec_wb",
+        "ufshcd_crypto_qti",
+        "ufs_qcom",
+
 	NULL
 };
 
