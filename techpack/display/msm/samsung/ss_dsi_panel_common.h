@@ -427,7 +427,7 @@ struct cmd_legoop_map {
 };
 
 enum CD_MAP_TABLE_LIST {
-	NORMAL,
+	NORMAL1,
 	PAC_NORMAL,
 	HBM,
 	PAC_HBM,
