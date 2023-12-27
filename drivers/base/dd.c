@@ -283,11 +283,6 @@ __setup("deferred_probe_timeout=", deferred_probe_timeout_setup);
  */
 int driver_deferred_probe_check_state(struct device *dev)
 {
-	if (!IS_ENABLED(CONFIG_MODULES) && initcalls_done) {
-		dev_warn(dev, "ignoring dependency for device, assuming no driver\n");
-		return -ENODEV;
-	}
-
 	if (!driver_deferred_probe_timeout && initcalls_done) {
 		dev_warn(dev, "deferred probe timeout, ignoring dependency\n");
 		return -ETIMEDOUT;
