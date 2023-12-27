@@ -285,7 +285,7 @@ int driver_deferred_probe_check_state(struct device *dev)
 {
 	if (!IS_ENABLED(CONFIG_MODULES) && initcalls_done) {
 		dev_warn(dev, "ignoring dependency for device, assuming no driver\n");
-		return -EPROBE_DEFER;
+		return -ENODEV;
 	}
 
 	if (!driver_deferred_probe_timeout && initcalls_done) {
