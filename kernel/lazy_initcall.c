@@ -912,6 +912,8 @@ static const __initconst char * const builtin_list[] = {
 	"c1dcvs_scmi",
 	"c1dcvs_vendor",
 	"qcom_rimps",
+	"ufs_qcom",
+	"ufshcd_crypto_qti",
 	"msm_qmp",
 	"qcom_aoss",
 	"stub_regulator",
