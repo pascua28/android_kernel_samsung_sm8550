@@ -205,8 +205,6 @@ struct cpu_status {
 	unsigned int max;
 };
 static DEFINE_PER_CPU(struct cpu_status, msm_perf_cpu_stats);
-static DEFINE_PER_CPU(struct freq_qos_request, qos_req_min);
-static DEFINE_PER_CPU(struct freq_qos_request, qos_req_max);
 
 static cpumask_var_t limit_mask_min;
 static cpumask_var_t limit_mask_max;
@@ -253,132 +251,11 @@ static unsigned int aggr_top_load;
 static unsigned int top_load[CLUSTER_MAX];
 static unsigned int curr_cap[CLUSTER_MAX];
 static atomic_t game_status_pid;
-static bool ready_for_freq_updates;
-
-static int freq_qos_request_init(void)
-{
-	unsigned int cpu;
-	int ret;
-
-	struct cpufreq_policy *policy;
-	struct freq_qos_request *req;
-
-	for_each_present_cpu(cpu) {
-		policy = cpufreq_cpu_get(cpu);
-		if (!policy) {
-			pr_err("%s: Failed to get cpufreq policy for cpu%d\n",
-				__func__, cpu);
-			ret = -EAGAIN;
-			goto cleanup;
-		}
-		per_cpu(msm_perf_cpu_stats, cpu).min = 0;
-		req = &per_cpu(qos_req_min, cpu);
-		ret = freq_qos_add_request(&policy->constraints, req,
-			FREQ_QOS_MIN, FREQ_QOS_MIN_DEFAULT_VALUE);
-		if (ret < 0) {
-			pr_err("%s: Failed to add min freq constraint (%d)\n",
-				__func__, ret);
-			cpufreq_cpu_put(policy);
-			goto cleanup;
-		}
-
-		per_cpu(msm_perf_cpu_stats, cpu).max = FREQ_QOS_MAX_DEFAULT_VALUE;
-		req = &per_cpu(qos_req_max, cpu);
-		ret = freq_qos_add_request(&policy->constraints, req,
-			FREQ_QOS_MAX, FREQ_QOS_MAX_DEFAULT_VALUE);
-		if (ret < 0) {
-			pr_err("%s: Failed to add max freq constraint (%d)\n",
-				__func__, ret);
-			cpufreq_cpu_put(policy);
-			goto cleanup;
-		}
-
-		cpufreq_cpu_put(policy);
-	}
-	return 0;
-
-cleanup:
-	for_each_present_cpu(cpu) {
-		req = &per_cpu(qos_req_min, cpu);
-		if (req && freq_qos_request_active(req))
-			freq_qos_remove_request(req);
-
-
-		req = &per_cpu(qos_req_max, cpu);
-		if (req && freq_qos_request_active(req))
-			freq_qos_remove_request(req);
-
-		per_cpu(msm_perf_cpu_stats, cpu).min = 0;
-		per_cpu(msm_perf_cpu_stats, cpu).max = FREQ_QOS_MAX_DEFAULT_VALUE;
-	}
-	return ret;
-}
 
 /*******************************sysfs start************************************/
 static ssize_t set_cpu_min_freq(struct kobject *kobj,
 	struct kobj_attribute *attr, const char *buf, size_t count)
 {
-	int i, ntokens = 0;
-	unsigned int val, cpu;
-	const char *cp = buf;
-	struct cpu_status *i_cpu_stats;
-	struct freq_qos_request *req;
-	int ret = 0;
-
-	if (!ready_for_freq_updates) {
-		ret = freq_qos_request_init();
-		if (ret) {
-			pr_err("%s: Failed to init qos requests policy for ret=%d\n",
-				__func__, ret);
-			return ret;
-		}
-		ready_for_freq_updates = true;
-	}
-
-	while ((cp = strpbrk(cp + 1, " :")))
-		ntokens++;
-
-	/* CPU:value pair */
-	if (!(ntokens % 2))
-		return -EINVAL;
-
-	cp = buf;
-	cpumask_clear(limit_mask_min);
-	for (i = 0; i < ntokens; i += 2) {
-		if (sscanf(cp, "%u:%u", &cpu, &val) != 2)
-			return -EINVAL;
-		if (cpu >= nr_cpu_ids)
-			break;
-
-		if (cpu_possible(cpu)) {
-			i_cpu_stats = &per_cpu(msm_perf_cpu_stats, cpu);
-
-			i_cpu_stats->min = val;
-			cpumask_set_cpu(cpu, limit_mask_min);
-		}
-
-		cp = strnchr(cp, strlen(cp), ' ');
-		cp++;
-	}
-
-	/*
-	 * Since on synchronous systems policy is shared amongst multiple
-	 * CPUs only one CPU needs to be updated for the limit to be
-	 * reflected for the entire cluster. We can avoid updating the policy
-	 * of other CPUs in the cluster once it is done for at least one CPU
-	 * in the cluster
-	 */
-	cpus_read_lock();
-	for_each_cpu(i, limit_mask_min) {
-		i_cpu_stats = &per_cpu(msm_perf_cpu_stats, i);
-
-		req = &per_cpu(qos_req_min, i);
-		if (freq_qos_update_request(req, i_cpu_stats->min) < 0)
-			continue;
-
-	}
-	cpus_read_unlock();
-
 	return count;
 }
 
@@ -399,61 +276,6 @@ static ssize_t get_cpu_min_freq(struct kobject *kobj,
 static ssize_t set_cpu_max_freq(struct kobject *kobj,
 	struct kobj_attribute *attr, const char *buf, size_t count)
 {
-	int i, ntokens = 0;
-	unsigned int val, cpu;
-	const char *cp = buf;
-	struct cpu_status *i_cpu_stats;
-	struct freq_qos_request *req;
-	int ret = 0;
-
-	if (!ready_for_freq_updates) {
-		ret = freq_qos_request_init();
-		if (ret) {
-			pr_err("%s: Failed to init qos requests policy for ret=%d\n",
-				__func__, ret);
-			return ret;
-		}
-		ready_for_freq_updates = true;
-	}
-
-	while ((cp = strpbrk(cp + 1, " :")))
-		ntokens++;
-
-	/* CPU:value pair */
-	if (!(ntokens % 2))
-		return -EINVAL;
-
-	cp = buf;
-	cpumask_clear(limit_mask_max);
-	for (i = 0; i < ntokens; i += 2) {
-		if (sscanf(cp, "%u:%u", &cpu, &val) != 2)
-			return -EINVAL;
-		if (cpu >= nr_cpu_ids)
-			break;
-
-		if (cpu_possible(cpu)) {
-			i_cpu_stats = &per_cpu(msm_perf_cpu_stats, cpu);
-
-			i_cpu_stats->max = min_t(uint, val,
-				(unsigned int)FREQ_QOS_MAX_DEFAULT_VALUE);
-			cpumask_set_cpu(cpu, limit_mask_max);
-		}
-
-		cp = strnchr(cp, strlen(cp), ' ');
-		cp++;
-	}
-
-	cpus_read_lock();
-	for_each_cpu(i, limit_mask_max) {
-		i_cpu_stats = &per_cpu(msm_perf_cpu_stats, i);
-
-		req = &per_cpu(qos_req_max, i);
-		if (freq_qos_update_request(req, i_cpu_stats->max) < 0)
-			continue;
-
-	}
-	cpus_read_unlock();
-
 	return count;
 }
 
