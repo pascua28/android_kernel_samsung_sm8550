@@ -1,3 +1,4 @@
+ccflags-y					+= $(CC_FLAGS_SCS) $(CC_FLAGS_CFI)
 
 # usb notify driver
 obj-$(CONFIG_USB_NOTIFY_LAYER)			+= usb_notify_layer.o
